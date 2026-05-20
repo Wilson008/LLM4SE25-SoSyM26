@@ -1,0 +1,40 @@
+### Differences between Grammar 1 and Grammar 2 (that affect Instance 1)
+
+1. **Top-level structure changed**
+   - **Grammar 1:** `Typescript` directly contains `interfacesAndClasses += (InterfaceDeclaration | ClassDeclaration | ModuleDeclaration )*;`
+   - **Grammar 2:** `Typescript` contains `interfacesAndClasses=InterfacesAndClasses;` where `InterfacesAndClasses` is `(modules+=ModuleDeclaration | types+=Declaration)*;`
+   - **Impact:** Top-level `module ... { ... }` is still valid. No instance change needed.
+
+2. **Modules can now have an optional `DocComment`**
+   - `ModuleDeclaration: docComment=DocComment? "module" ...`
+   - **Impact:** Optional → do **not** instantiate (per your rule #2). No change.
+
+3. **Interfaces/classes are now wrapped in `Declaration` and share `ObjectType` via `InterfaceOrClassDeclaration`**
+   - **Grammar 1:** `InterfaceDeclaration` includes `objectType=ObjectType;` directly.
+   - **Grammar 2:** `Declaration: docComment? declaration=InterfaceOrClassDeclaration;`
+     and `InterfaceOrClassDeclaration: (InterfaceDeclaration | ClassDeclaration) objectType=ObjectType;`
+   - **Impact:** Syntactically in concrete text, this wrapper adds no new keyword/token—so the text `export interface X { ... }` remains valid. No change needed.
+
+4. **TypeReference target changed**
+   - **Grammar 1:** `reference = [InterfaceDeclaration|QualifiedName];`
+   - **Grammar 2:** `reference = [InterfaceOrClassDeclaration|QualifiedName];`
+   - **Impact:** Your instance uses `import Y = A;` where `A` is a module name, not a type. This was already “loose” in Grammar 1 because `QualifiedName` allows it, and it still works in Grammar 2. No change.
+
+5. **New doc comment/annotation terminals**
+   - Added `DocComment`, `AnnotationLine`, and new comment terminals.
+   - **Impact:** Optional (DocComment) or unrelated to required syntax. Per rule #2, do not add them. Keep existing comments/whitespace.
+
+### Instance 2 (evolved from Instance 1 to conform to Grammar 2)
+
+No textual change is required; **Instance 1 already conforms to Grammar 2** under your constraints (don’t instantiate new optional constructs; don’t change formatting).
+
+```typescript
+module A { 
+ export interface X { s: string } 
+} 
+ 
+module B { 
+ /*var A = 1; */ 
+ import Y = A; 
+} 
+```

@@ -1,0 +1,87 @@
+I can do the transformation, but I can’t satisfy requirement **(3)** as stated with the content you provided: **Instance 1 is truncated** in the message (it ends mid-file, and there are also very long sections). Without the *complete* original text, I can’t guarantee “don’t miss or add any formats / whitespace / empty lines” because I don’t know what comes after the cutoff, and I can’t ensure I’m not accidentally changing spacing in parts you didn’t include.
+
+If you paste the **entire Instance 1** verbatim (ideally as an attached file or in a single code block), I’ll return **Instance 2** with formatting preserved exactly except for the minimal edits required by Grammar 2.
+
+Meanwhile, here’s the analysis of **Grammar 1 → Grammar 2** and the **minimal, mechanical changes** that must be applied to Instance 1 to make it parse with Grammar 2, following your rules (no instantiation of new optional features):
+
+## Differences that affect instances
+
+### 1) Domainmodel structure changed (new `AttributeList` blocks allowed before components)
+Grammar 1:
+```xtext
+Domainmodel: (elements+=Component)*;
+```
+Grammar 2:
+```xtext
+Domainmodel:
+  (elements+=AttributeList)*
+  (elements+=Component)*;
+```
+**Impact:** Existing files that only contain `widget ...` blocks are still valid *in principle* because `AttributeList*` can be empty. So you do **not** need to add any `attribute_list` sections.
+
+However, see point 2: components now may reference attribute lists via `+`.
+
+### 2) Component body now optionally contains `('+' attributeLists += ID)*`
+Grammar 1 component body:
+```xtext
+'{' (attributes+=Attribute)* '}'
+```
+Grammar 2 component body:
+```xtext
+'{'
+  (attributes+=Attribute)*
+  ('+' attributeLists += ID)*
+'}'
+```
+**Impact:** Your existing `{ attribute... }` bodies still parse without change because the `+ ...` part is optional and can be absent. Per your rule (2), we should **not** add `+ ...` references.
+
+### 3) New optional flag in Component: `is_responsive`
+Grammar 2 adds:
+```xtext
+(isReponsive='is_responsive')?
+```
+**Impact:** Optional; per rule (2), do **not** add it.
+
+### 4) Attribute types extended/modified
+Grammar 2 `Attributetype` adds/changes:
+- Added: `Float`, `javax.el.ValueExpression`, `Drawing`, `java.lang.Object`, `ScrollSpyEventListener`, `Node`
+- `Map<...>` literal changed slightly:
+  - Grammar 1: `'Map<' QualifiedName ', ' QualifiedName '>';`
+  - Grammar 2: `'Map<' QualifiedName ',' QualifiedName '>'`
+  Differences:
+  - No space after comma in grammar 2
+  - No trailing semicolon token in the literal (in Grammar 1 it was part of the grammar rule; in instances you never wrote a semicolon anyway)
+
+**Impact on Instance 1:**  
+Only matters for attributes that explicitly declare a `Map<...>` type *using the DSL’s `Attributetype` alternative*. In your Instance 1, I saw:
+```
+dataTable-properties Map<DataTablePropertyType, Object> "..."
+```
+This **will NOT parse in Grammar 2** as written, because Grammar 2 requires **no space after the comma**:
+```
+Map<DataTablePropertyType,Object>
+```
+Also, in Grammar 2 the inner types are `QualifiedName`, so `DataTablePropertyType` and `Object` must be tokenizable as `QualifiedName` (they are: single IDs). So the fix is purely whitespace inside the map type.
+
+There may be other `Map<..., ...>` occurrences later in the file; they would need the same comma-space removal.
+
+### 5) Everything else is compatible
+- `Attribute`, `QualifiedName`, `CSSID` rules are unchanged.
+- Keywords with trailing spaces inside the quotes (e.g. `'implemented_by '`, `'rendered_by '`) remain the same: **instances already match them** (they are literal keywords; whitespace handling is by lexer anyway). Still, your instruction (1) is noted: don’t “forget” these quoted symbols—i.e., don’t rename keywords.
+
+## What needs to change in Instance 1 to become Instance 2 (minimal edits)
+Given your constraints (don’t instantiate new optional constructs; preserve formatting):
+1) **Do not add** any `attribute_list` blocks.
+2) **Do not add** any `+ attributeLists` lines.
+3) **Do not add** `is_responsive`.
+4) **Only change** `Map<... , ...>` occurrences to `Map<...,...>` (remove the space after the comma) *where they are used as the attribute type*.
+
+Example (from your snippet):
+```diff
+-    dataTable-properties Map<DataTablePropertyType, Object>                "A java.util.Map<net.bootsfaces.component.dataTable.DataTable.DataTablePropertyType, Object> map ..."
++    dataTable-properties Map<DataTablePropertyType,Object>                "A java.util.Map<net.bootsfaces.component.dataTable.DataTable.DataTablePropertyType, Object> map ..."
+```
+Note: I am **not** changing the description string (inside quotes) even though it contains `Map<..., Object>` with a space—because that’s free text and irrelevant to parsing, and you said don’t change formatting/content unnecessarily.
+
+## Next step
+Please paste the **complete Instance 1** (verbatim). Then I will output **Instance 2** identical to Instance 1 except for the minimal `Map<...,...>` fixes required by Grammar 2, with all whitespace/indentation/empty lines preserved exactly.

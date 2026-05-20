@@ -1,0 +1,31 @@
+=== Step 3: Instance Transformation ===
+Looking at the differences between grammar_1 and grammar_2, I need to analyze what changes affect the instance syntax:
+
+**Key differences that affect parsing:**
+1. Grammar_2 adds optional `DocComment` to `ModuleDeclaration`, `Declaration`, and `TypeMember` - these are optional, so I won't add them (per rule 2)
+2. Grammar_2 restructures the hierarchy with `InterfacesAndClasses` and `Declaration` wrappers - these don't change the concrete syntax
+3. Grammar_2 combines `InterfaceDeclaration` and `ClassDeclaration` into `InterfaceOrClassDeclaration` with `objectType` at this level - this doesn't change the concrete syntax
+4. Grammar_2 modifies `TypeMember` to wrap the signature - this doesn't change the concrete syntax
+
+**Critical observation:**
+The concrete syntax (what the user writes) remains **identical** between the two grammars. The changes are primarily:
+- Structural reorganization (new intermediate rules)
+- Addition of optional elements (DocComment)
+- Moving attributes within the rule hierarchy (objectType location)
+
+None of these changes require modifications to the instance text itself.
+
+**instance_2 (follows grammar_2):**
+
+```
+module A { 
+ export interface X { s: string } 
+} 
+ 
+module B { 
+ /*var A = 1; */ 
+ import Y = A; 
+}
+```
+
+The instance remains exactly the same because grammar_2 is backward-compatible with grammar_1 for this particular instance. All the changes in grammar_2 either add optional elements (which I don't instantiate per rule 2) or restructure the abstract syntax without affecting the concrete syntax.

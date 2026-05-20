@@ -1,0 +1,31 @@
+=== Step 3: Instance Transformation ===
+Based on my analysis of the differences between grammar_1 and grammar_2, I can confirm that **instance_1 remains valid and unchanged for grammar_2**.
+
+Here's why:
+
+**Analysis of grammar changes:**
+
+1. **InterfacesAndClasses wrapper**: This is a transparent wrapper rule that doesn't change the concrete syntax - it still accepts the same sequence of modules and declarations.
+
+2. **Declaration and InterfaceOrClassDeclaration**: These are refactoring rules that group existing elements differently in the abstract syntax tree, but don't change the concrete syntax for interfaces and classes.
+
+3. **DocComment additions**: All `docComment` attributes are **optional** (`docComment=DocComment?`), so according to rule #2, we should not instantiate them.
+
+4. **TypeMember changes**: The addition of optional `docComment` and the wrapping of `signature` doesn't change the concrete syntax - property signatures are still written the same way.
+
+5. **TypeReference change**: This only affects the internal reference mechanism (pointing to `InterfaceOrClassDeclaration` instead of `InterfaceDeclaration`), but doesn't change how references are written in the text.
+
+**instance_2 (unchanged from instance_1):**
+
+```
+module A { 
+ export interface X { s: string } 
+} 
+ 
+module B { 
+ /*var A = 1; */ 
+ import Y = A; 
+} 
+```
+
+All the structural changes in grammar_2 are either optional features (DocComments) or internal AST reorganizations that don't affect the concrete textual syntax. Therefore, the instance remains identical.

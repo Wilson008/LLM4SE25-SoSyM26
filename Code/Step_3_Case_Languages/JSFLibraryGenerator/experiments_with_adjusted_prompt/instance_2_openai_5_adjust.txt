@@ -1,0 +1,65 @@
+I can do the migration, but I can’t satisfy constraint **(3)** as stated with the data you’ve provided so far: **Instance 1 is truncated** (it ends after `widget growl ...` and clearly isn’t the full file), and “don’t miss or add any formats” requires I have the *exact* full original text to reproduce it byte-for-byte except for the minimal edits.
+
+That said, the **grammar changes from Grammar 1 → Grammar 2 that affect instances** are:
+
+1. **New top-level rule** `AttributeList` and Domainmodel now allows:
+   - zero or more `attribute_list ... { ... }` blocks **before** widgets
+   - then widgets
+   This is additive; existing widget-only files remain parseable **if** widgets still match.
+
+2. **Component body change**: inside `Component { ... }` Grammar 2 allows, after normal attributes:
+   - `('+' attributeLists += ID)*`
+   i.e., you may reference attribute lists via `+ listName`.
+   This is additive; you don’t have to add any.
+
+3. **New optional component flag**: `(isReponsive='is_responsive')?`
+   Additive; per your rule (2), we must **not** instantiate it.
+
+4. **Attributetype extension**:
+   - Added `Float`, `javax.el.ValueExpression`, `Drawing`, `java.lang.Object`, `ScrollSpyEventListener`, `Node`
+   - The `Map<...>` literal changed slightly:  
+     Grammar 1: `'Map<' QualifiedName ', ' QualifiedName '>'` (note the **comma+space**)  
+     Grammar 2: `'Map<' QualifiedName ',' QualifiedName '>'` (note **no spaces required/encoded around comma** in the literal)
+   This only forces changes if Instance 1 actually contains `Map<...>` typed attributes and the concrete text matches the old literal. (I saw at least one: `dataTable-properties Map<DataTablePropertyType, Object> ...`.)
+
+So the only **required** syntactic migration I can already see in the snippet is likely:
+
+- Change any attribute type written as:  
+  `Map<Something, SomethingElse>`  
+  to  
+  `Map<Something,SomethingElse>`  
+  (remove the space after the comma), because Grammar 2’s `Attributetype` literally encodes the comma without a space.
+
+Everything else can remain unchanged (and per your rule (2) we must not add `attribute_list`, `+ ...`, or `is_responsive`).
+
+---
+
+## What I need from you to produce Instance 2 correctly
+Please paste the **complete** Instance 1 text (the entire file), *exactly as-is*. Then I will:
+- apply only the mandatory edits to satisfy Grammar 2,
+- keep every whitespace/indent/blank line exactly (except where the grammar forces a textual change, e.g. the `Map<...,...>` spacing).
+
+---
+
+## Minimal patch I can already derive from the provided excerpt
+In the portion you pasted, I saw this line (in `widget dataTable`):
+
+```
+    dataTable-properties Map<DataTablePropertyType, Object>                "A java.util.Map<net.bootsfaces.component.dataTable.DataTable.DataTablePropertyType, Object> map on the backing bean where the state of the DataTable can be saved, and retrieved after re-rendering."
+```
+
+To conform to Grammar 2, it must become (only removing the single space after the comma inside the `Map<...>` type):
+
+```
+    dataTable-properties Map<DataTablePropertyType,Object>                "A java.util.Map<net.bootsfaces.component.dataTable.DataTable.DataTablePropertyType, Object> map on the backing bean where the state of the DataTable can be saved, and retrieved after re-rendering."
+```
+
+Notes:
+- I am **not** changing the description string (it contains spaces after commas and that’s fine; it’s just a `STRING`).
+- I am **not** adding any new `attribute_list` blocks, `+ listName` references, or `is_responsive`.
+
+If there are other `Map<...,...>` occurrences elsewhere in the full file, they need the same treatment.
+
+---
+
+Send the complete Instance 1 and I’ll return the full **Instance 2**.

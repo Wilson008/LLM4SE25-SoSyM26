@@ -1,0 +1,94 @@
+=== Step 3: Instance Transformation ===
+Looking at the differences between grammar_1 and grammar_2, I can identify these key changes:
+
+1. **Domainmodel** now includes `AttributeList` elements before components
+2. **AttributeList** is a new rule for defining reusable attribute lists
+3. **Component** has:
+   - A new optional flag `is_responsive`
+   - A new capability to reference AttributeLists using `'+' attributeLists += ID`
+4. **Attributetype** has additional types (Float, javax.el.ValueExpression, Drawing, java.lang.Object, ScrollSpyEventListener, Node)
+
+Since the instance uses only features from grammar_1 and grammar_2 only adds optional features (AttributeLists, is_responsive flag, and additional attribute types), the instance remains valid as-is for grammar_2.
+
+However, to be thorough, here is instance_2 (which is identical to instance_1 since no changes are required):
+
+```
+widget alert
+       implemented_by net.bootsfaces.component.Alert
+       extends UIComponentBase
+       has_children
+       has_tooltip
+ {
+    binding             javax.faces.component.UIComponent                  "An el expression referring to a server side UIComponent instance in a backing bean."
+    closable            Boolean                                            "If true close button will be displayed."
+    id                  inherited                                         "Unique identifier of the component in a namingContainer."
+    rendered            Boolean inherited                                  "Boolean value to specify the rendering of the component, when set to false component will not be rendered."
+    severity                                                               "Severity of the Alert, can be success, info, warning, danger. Default is warning."
+    style                                                                  "Inline style of the input element."
+    style-class                                                             "Style class of this element."
+    title                                                                  "Bold Title displayed before your message."
+    tooltip                                                                "The text of the tooltip."
+    tooltip-container    default "body"                                     "Where is the tooltip div generated? That's primarily a technical value that can be used to fix rendering error in special cases. Also see data-container in the documentation of Bootstrap. The default value is body."
+    tooltip-delay        Integer                                            "The tooltip is shown and hidden with a delay. This value is the delay in milliseconds. Defaults to 0 (no delay)."
+    tooltip-delay-hide    Integer                                            "The tooltip is hidden with a delay. This value is the delay in milliseconds. Defaults to 0 (no delay)."
+    tooltip-delay-show    Integer                                            "The tooltip is shown with a delay. This value is the delay in milliseconds. Defaults to 0 (no delay)."
+    tooltip-position                                                        "Where is the tooltip to be displayed? Possible values: \"top\", \"bottom\", \"right\", \"left\", \"auto\", \"auto top\", \"auto bottom\", \"auto right\" and \"auto left\". Default to \"bottom\"."
+}
+
+
+widget badge
+       implemented_by net.bootsfaces.component.Badge
+       extends UIComponentBase
+ {
+    binding             javax.faces.component.UIComponent                  "An el expression referring to a server side UIComponent instance in a backing bean."
+    id                  inherited                                          "Unique identifier of the component in a namingContainer."
+    rendered            Boolean inherited                                  "Boolean value to specify the rendering of the component, when set to false component will not be rendered."
+    style                                                                  "Inline style of the input element."
+    style-class                                                             "Style class of this element."
+    value               mandatory inherited                                "Label text."
+}
+
+widget button
+       implemented_by net.bootsfaces.component.Button
+       extends HtmlOutcomeTargetButton
+       has_tooltip
+ {
+    accesskey                                                              "Access key to transfer focus to the input element."
+    binding             javax.faces.component.UIComponent                  "An el expression referring to a server side UIComponent instance in a backing bean."
+    dir                                                                    "Direction indication for text that does not inherit directionality. Legal values: ltr (Default. Left-to-right text direction), rtl (Right-to-left text direction) and auto (let the browser figure out the direction of your alphebet, based on the page content)."
+    disabled            Boolean                                            "Boolean value to specify if the button is disabled."
+    dismiss                                                                "This attribute is mapped to the HTML5 data-dismiss custom attribute."
+    fragment                                                               "The fragment  that is to be appended to the target URL. The # separator is applied automatically and needs not be included."
+    icon                                                                   "Button Icon, can be one of the Bootstrap icon names. Alignment can be specified with icon-align attribute."
+    icon-align                                                              "Alignment can right or left."
+    icon-awesome                                                            "Font Awesome Icon to show in this Button, can be one of the Font Awesome icon names. Alignment can be specified with the icon-align attribute."
+    id                  inherited                                          "Unique identifier of the component in a namingContainer."
+    immediate           Boolean                                            "Flag indicating that, if this component is activated by the user, notifications should be delivered to interested listeners and actions immediately (that is, during Apply Request Values phase) rather than waiting until Invoke Application phase. Default is false."
+    lang                                                                  "Code describing the language used in the generated markup for this component."
+    look                                                                   "Look of the Button, can be primary, block, info, success, warning, important, error, inverse. If not specified, Standard gray button with gradient is rendered."
+    onblur                                                                 "Client side callback to execute when input element loses focus."
+    onchange                                                               "Client side callback to execute when input element loses focus and its value has been modified since gaining focus."
+    onclick                                                                "The onclick attribute."
+    ondblclick                                                             "Client side callback to execute when input element is double clicked."
+    onfocus                                                                "Client side callback to execute when input element receives focus."
+    onkeydown                                                              "Client side callback to execute when a key is pressed down over input element."
+    onkeypress                                                             "Client side callback to execute when a key is pressed and released over input element."
+    onkeyup                                                                "Client side callback to execute when a key is released over input element."
+    onmousedown                                                            "Client side callback to execute when a pointer input element is pressed down over input element."
+    onmousemove                                                            "Client side callback to execute when a pointer input element is moved within input element."
+    onmouseout                                                             "Client side callback to execute when a pointer input element is moved away from input element."
+    onmouseover                                                            "Client side callback to execute when a pointer input element is moved onto input element."
+    onmouseup                                                              "Client side callback to execute when a pointer input element is released over input element."
+    onselect                                                               "Client side callback to execute when text within input element is selected by user."
+    outcome                                                                "The outcome to navigate to."
+    rendered            Boolean inherited                                  "Boolean value to specify the rendering of the component, when set to false component will not be rendered."
+    size                                                                   "Size of the Button, can be large, small, mini. If not specified, Standard size button is rendered."
+    style                                                                  "Inline style of the input element."
+    style-class                                                             "Style class of this element."
+    tabindex                                                               "Position of this element in the tabbing order for the current document.  This value must be an integer between 0 and 32767."
+    title                                                                  "Advisory tooltip information."
+    tooltip                                                                "The text of the tooltip."
+    tooltip-container    default "body"                                     "Where is the tooltip div generated? That's primarily a technical value that can be used to fix rendering error in special cases. Also see data-container in the documentation of Bootstrap. The default value is body."
+    tooltip-delay        Integer                                            "The tooltip is shown and hidden with a delay. This value is the delay in milliseconds. Defaults to 0 (no delay)."
+    tooltip-delay-hide    Integer                                            "The tooltip is hidden with a delay. This value is the delay in milliseconds. Defaults to 0 (no delay)."
+    tooltip-delay-show    Integer                                            "The tooltip is shown with a delay. This

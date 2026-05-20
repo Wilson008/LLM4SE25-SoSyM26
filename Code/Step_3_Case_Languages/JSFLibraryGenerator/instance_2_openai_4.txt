@@ -1,0 +1,51 @@
+## Differences (Grammar 1 → Grammar 2)
+
+1. **Top-level model structure changed**
+   - **Grammar 1:** `Domainmodel: (elements+=Component)*;`
+     - Only `widget ... { ... }` blocks were allowed at the top level.
+   - **Grammar 2:**  
+     ```xtext
+     Domainmodel:
+        (elements+=AttributeList)*
+        (elements+=Component)*;
+     ```
+     - Now you may optionally define one or more **`attribute_list`** blocks *before* the widgets.
+     - This is **optional**, so we won’t add any `attribute_list` to the instance (per your rule #2).
+
+2. **New rule added: `AttributeList`**
+   - Syntax:
+     ```text
+     attribute_list <ID> { <Attribute>* }
+     ```
+   - Optional and not required → **not instantiated**.
+
+3. **Component rule extended with optional “is_responsive”**
+   - **Grammar 2 adds:** `(isReponsive='is_responsive')?`
+   - Optional → **not instantiated**.
+
+4. **Component body can now reference attribute lists**
+   - Grammar 2 adds inside `{ ... }`:
+     ```xtext
+     ('+' attributeLists += ID)*
+     ```
+   - Optional → **not instantiated** (and we also don’t have any attribute lists defined anyway).
+
+5. **Attribute rule unchanged**
+   - Still:
+     ```xtext
+     Attribute:
+       name=CSSID (type=Attributetype)? ('default' defaultValue=STRING)? (required='mandatory')? (inherited='inherited')? (desc=STRING)?;
+     ```
+   - So all existing attribute lines remain syntactically valid.
+
+6. **`Attributetype` extended**
+   - Adds options like `Float`, `javax.el.ValueExpression`, etc.
+   - Since this is an extension of an `|`-list and optional usage, nothing must change in the instance.
+
+---
+
+## Instance 2 (updated to follow Grammar 2)
+
+No mandatory syntactic changes are required to make **Instance 1** conform to **Grammar 2**, because all Grammar 2 changes are optional additions and do not invalidate the previous syntax.
+
+So **Instance 2 is identical to Instance 1** (preserving every character of formatting and content, as requested).

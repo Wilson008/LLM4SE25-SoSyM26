@@ -1,3 +1,0 @@
-Response after Instance 1: 
-
-Instance 2 has been saved to 'Code\Step_3_Case_Languages\elite-se.xtext.languages.plantuml\instance_2_gen_openai_1.txt'.

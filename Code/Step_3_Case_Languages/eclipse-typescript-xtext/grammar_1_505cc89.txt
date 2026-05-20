@@ -1,0 +1,87 @@
+grammar ch.vobos.Typescript with org.eclipse.xtext.common.Terminals
+
+generate typescript "http://www.vobos.ch/Typescript"
+
+Typescript:
+	imports+= ImportDeclaration*
+	interfacesAndClasses += (InterfaceDeclaration | ClassDeclaration | ModuleDeclaration )*;
+
+ModuleDeclaration:
+	"module" name=Identifier ("." Identifier)*  "{" body=ModuleBody "}" ;
+
+ModuleBody: {ModuleBody}
+	elements+=ModuleElement*;
+
+ModuleElement: 
+		/*Statement |  */ 
+     exported?="export"? moduleContent=( ClassDeclaration |InterfaceDeclaration 
+     /* | EnumDeclaration |VariableDeclaration | FunctionDeclaration  */ | ModuleDeclaration | ImportDeclaration )
+     ';'?; 
+
+ImportDeclaration: 
+	"import" alias=Identifier "=" name=QualifiedName ;
+
+InterfaceDeclaration:
+	"interface" name=Identifier /* TypeParameters? */ extendClause=InterfaceExtendsClause? objectType=ObjectType;
+
+ClassDeclaration:
+	"class" name=Identifier /* TypeParameter ClassHeritage */ classType=ObjectType; // TODO: for now we treat interfaces and classes the same
+
+Identifier:
+	ID;
+
+InterfaceExtendsClause:
+	"extends" ClassOrInterfaceTypeList;
+
+ClassOrInterfaceTypeList: { ClassOrInterfaceTypeList }
+	parents += TypeReference (',' parents += TypeReference)*
+;
+
+ObjectType: { ObjectType }
+	"{" (members += TypeMember ';'?)* "}";
+
+TypeMember:
+	PropertySignature
+/*	CallSignature
+	ConstructSignature
+	IndexSignature
+	MethodSignature */
+;
+
+PropertySignature:
+	name = IdentifierName // | StringLiteral | NumericLiteral
+	optional ?= "?"?
+	":"
+	type=Type;
+
+IdentifierName:
+	ID;
+
+StringLiteral:
+	STRING;
+
+NumericLiteral:
+	INT // TODO valid NumericLiteral in http://www.ecma-international.org/publications/files/ECMA-ST/Ecma-262.pdf
+;
+
+Type: PredefinedType | TypeReference | TypeLiteral; // | TypeQuery 
+
+PredefinedType:
+	predefinedType = PredefinedTypeEnum;
+
+TypeLiteral:
+	ObjectType | ArrayType  /* | FunctionType | ConstructorType */ ;
+
+ArrayType: {ArrayType}
+	array = PredefinedType "[" "]" |  TypeReference "[" "]" 
+	/*ObjectType [ ] 
+	ArrayType [ ] */;
+
+TypeReference:
+	reference = [InterfaceDeclaration|QualifiedName];
+
+QualifiedName:
+	ID ('.' ID)* ;
+
+enum PredefinedTypeEnum:
+	any | number | boolean | string | void;

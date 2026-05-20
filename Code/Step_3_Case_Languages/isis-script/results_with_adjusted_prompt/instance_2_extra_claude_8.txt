@@ -1,0 +1,93 @@
+=== Step 3: Instance Transformation ===
+Looking at the differences between the two grammars and analyzing the instance, here's the evolved instance that conforms to grammar_2:
+
+```
+package domainapp.dom.modules.simple
+
+import javax.jdo.annotations.Column
+import javax.jdo.annotations.DatastoreIdentity
+import javax.jdo.annotations.IdGeneratorStrategy
+import javax.jdo.annotations.IdentityType
+import javax.jdo.annotations.PersistenceCapable
+import javax.jdo.annotations.Queries
+import javax.jdo.annotations.Query
+import javax.jdo.annotations.Unique
+import javax.jdo.annotations.Version
+import javax.jdo.annotations.VersionStrategy
+import org.apache.isis.applib.annotation.Action
+import org.apache.isis.applib.annotation.ActionLayout
+import org.apache.isis.applib.annotation.BookmarkPolicy
+import org.apache.isis.applib.annotation.DomainObject
+import org.apache.isis.applib.annotation.DomainObjectLayout
+import org.apache.isis.applib.annotation.DomainServiceLayout
+import org.apache.isis.applib.annotation.Editing
+import org.apache.isis.applib.annotation.MemberOrder
+import org.apache.isis.applib.annotation.Parameter
+import org.apache.isis.applib.annotation.ParameterLayout
+import org.apache.isis.applib.annotation.Property
+import org.apache.isis.applib.annotation.SemanticsOf
+import org.apache.isis.applib.annotation.Title
+import org.apache.isis.applib.query.QueryDefault
+import org.apache.isis.applib.services.i18n.TranslatableString
+
+@PersistenceCapable(identityType=IdentityType.DATASTORE)
+@DatastoreIdentity(strategy=IdGeneratorStrategy.IDENTITY, column="id")
+@Version(strategy=VersionStrategy.VERSION_NUMBER, column="version")
+@Queries(#[
+	@Query(name = "find", language = "JDOQL",
+		value = "SELECT FROM domainapp.dom.modules.simple.SimpleObject"),
+	@Query(name = "findByName", language = "JDOQL",
+		value = "SELECT FROM domainapp.dom.modules.simple.SimpleObject WHERE name.indexOf(:name) >= 0")
+])
+@Unique(name="SimpleObject_name_UNQ", members = #["name"])
+@DomainObject(objectType = "SIMPLE")
+@DomainObjectLayout(bookmarking = BookmarkPolicy.AS_ROOT)
+entity SimpleObject {
+
+	@Column(allowsNull="false", length = 40)
+	@Title(sequence="1")
+	@Property(editing = Editing.DISABLED)
+	property String name {
+		event UpdateNameDomainEvent
+	}
+
+	@Action(domainEvent = UpdateNameDomainEvent)
+	action void updateName {
+		@Parameter(maxLength = 40)
+            @ParameterLayout(named = "New name")
+		parameter String newName
+		default {
+			getName()
+		}
+		validate {
+			if (name.contains("!"))
+        			TranslatableString.tr("Exclamation mark is not allowed")
+        		else null
+		}
+		body {
+			setName(newName)
+			this
+		}
+	}
+
+	title {
+		TranslatableString.tr("Object: {name}", "name", name)
+	}
+
+}
+```
+
+**Key changes made:**
+
+1. **Removed `repository` block** - The `IsisRepository` rule no longer exists in grammar_2's IsisEntity, so the entire repository section with its actions (listAll, findByName, create) has been removed.
+
+2. **Moved `event` inside `property`** - The `UpdateNameDomainEvent` is now inside the property body, as grammar_2 allows events within properties.
+
+3. **Restructured `action updateName`** - Changed from grammar_1's format with parameters in parentheses and direct expression body to grammar_2's format with curly braces containing:
+   - `parameter` declarations (replacing the parentheses syntax)
+   - Action parameter features (`default` and `validate` as `IsisActionParameterFeature`)
+   - `body` feature (as `IsisActionFeature`)
+
+4. **Removed standalone actions** - The `default0UpdateName` and `validateUpdateName` actions are now integrated as parameter features within the main action.
+
+5. **Changed action return type** - From optional `(returnType=JvmTypeReference)?` to mandatory `type=JvmTypeReference`, using `void` as the type.

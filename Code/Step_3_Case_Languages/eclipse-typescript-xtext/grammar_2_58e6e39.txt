@@ -1,0 +1,113 @@
+grammar ch.vobos.Typescript with org.eclipse.xtext.common.Terminals
+
+generate typescript "http://www.vobos.ch/Typescript"
+
+Typescript:
+	imports+= ImportDeclaration*
+	interfacesAndClasses=InterfacesAndClasses;
+
+InterfacesAndClasses: {InterfacesAndClasses}
+    (modules+=ModuleDeclaration  | types+=Declaration)*;
+
+ImportDeclaration: 
+	"import" alias=Identifier "=" name=QualifiedName ;
+
+
+ModuleDeclaration:
+	docComment=DocComment?  "module" name=Identifier ("." Identifier)*  "{" body=ModuleBody "}" ;
+
+ModuleBody: {ModuleBody}
+	elements+=ModuleElement*;
+
+ModuleElement: 
+		/*Statement |  */ 
+     exported?="export"? moduleContent=( Declaration 
+     /* | EnumDeclaration |VariableDeclaration | FunctionDeclaration  */ | ModuleDeclaration | ImportDeclaration )
+     ';'?; 
+
+
+Declaration:
+    docComment=DocComment? declaration=InterfaceOrClassDeclaration;
+
+InterfaceOrClassDeclaration: (InterfaceDeclaration | ClassDeclaration) objectType=ObjectType;
+
+
+InterfaceDeclaration:
+	"interface" name=Identifier /* TypeParameters? */ extendClause=InterfaceExtendsClause?;
+
+ClassDeclaration:
+	"class" name=Identifier /* TypeParameter ClassHeritage */; // TODO: for now we treat interfaces and classes the same
+
+Identifier:
+	ID;
+
+InterfaceExtendsClause:
+	"extends" ClassOrInterfaceTypeList;
+
+ClassOrInterfaceTypeList: { ClassOrInterfaceTypeList }
+	parents += TypeReference (',' parents += TypeReference)*
+;
+
+ObjectType: { ObjectType }
+	"{" (members += TypeMember ';'?)* "}";
+
+TypeMember:
+    docComment = DocComment?
+    signature = ( PropertySignature
+    /*	| CallSignature
+    	| ConstructSignature
+    	| IndexSignature
+    	| MethodSignature */
+	);
+
+PropertySignature:
+	name = IdentifierName // | StringLiteral | NumericLiteral
+	optional ?= "?"?
+	":"
+	type=Type;
+
+IdentifierName:
+	ID;
+
+StringLiteral:
+	STRING;
+
+NumericLiteral:
+	INT // TODO valid NumericLiteral in http://www.ecma-international.org/publications/files/ECMA-ST/Ecma-262.pdf
+;
+
+Type: PredefinedType | TypeReference | TypeLiteral; // | TypeQuery 
+
+PredefinedType:
+	predefinedType = PredefinedTypeEnum;
+
+TypeLiteral:
+	ObjectType | ArrayType  /* | FunctionType | ConstructorType */ ;
+
+ArrayType: {ArrayType}
+	array = PredefinedType "[" "]" |  TypeReference "[" "]" 
+	/*ObjectType [ ] 
+	ArrayType [ ] */;
+
+TypeReference:
+	reference = [InterfaceOrClassDeclaration|QualifiedName];
+
+QualifiedName:
+	ID ('.' ID)* ;
+
+enum PredefinedTypeEnum:
+	any | number | boolean | string | void;
+
+DocComment: {DocComment}
+    '/**' lines+=DOC_COMMENT_LINE* annotations+=AnnotationLine* DOC_COMMENT_END;
+
+AnnotationLine:
+    DOC_ANNOTATION_PREFIX annotationName=ID;
+   
+terminal DOC_COMMENT_END: (' '|'\t')* '*' '/';
+
+terminal DOC_ANNOTATION_PREFIX: (' '|'\t')* '* @';
+
+terminal DOC_COMMENT_LINE : (' '|'\t')* '*'!'/' !'@' -> ('\r'? '\n');
+
+terminal ML_COMMENT : '/*'!'*' -> '*/';

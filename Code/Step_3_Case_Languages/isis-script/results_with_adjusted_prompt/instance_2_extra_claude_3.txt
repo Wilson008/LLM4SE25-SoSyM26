@@ -1,0 +1,103 @@
+=== Step 3: Instance Transformation ===
+Looking at the differences between grammar_1 and grammar_2, I need to make the following changes to the instance:
+
+1. **Remove `repository` block** - IsisRepository rule no longer exists in grammar_2
+2. **Convert `action` syntax** - Actions now use block structure with `body` feature instead of parameters in parentheses and direct expression
+3. **Move `event` inside `property`** - Events are now nested within properties in grammar_2
+4. **Convert standalone actions** - The `default0UpdateName` and `validateUpdateName` actions need to be converted to the new syntax
+
+Here's the evolved instance:
+
+```
+package domainapp.dom.modules.simple
+
+import javax.jdo.annotations.Column
+import javax.jdo.annotations.DatastoreIdentity
+import javax.jdo.annotations.IdGeneratorStrategy
+import javax.jdo.annotations.IdentityType
+import javax.jdo.annotations.PersistenceCapable
+import javax.jdo.annotations.Queries
+import javax.jdo.annotations.Query
+import javax.jdo.annotations.Unique
+import javax.jdo.annotations.Version
+import javax.jdo.annotations.VersionStrategy
+import org.apache.isis.applib.annotation.Action
+import org.apache.isis.applib.annotation.ActionLayout
+import org.apache.isis.applib.annotation.BookmarkPolicy
+import org.apache.isis.applib.annotation.DomainObject
+import org.apache.isis.applib.annotation.DomainObjectLayout
+import org.apache.isis.applib.annotation.DomainServiceLayout
+import org.apache.isis.applib.annotation.Editing
+import org.apache.isis.applib.annotation.MemberOrder
+import org.apache.isis.applib.annotation.Parameter
+import org.apache.isis.applib.annotation.ParameterLayout
+import org.apache.isis.applib.annotation.Property
+import org.apache.isis.applib.annotation.SemanticsOf
+import org.apache.isis.applib.annotation.Title
+import org.apache.isis.applib.query.QueryDefault
+import org.apache.isis.applib.services.i18n.TranslatableString
+
+@PersistenceCapable(identityType=IdentityType.DATASTORE)
+@DatastoreIdentity(strategy=IdGeneratorStrategy.IDENTITY, column="id")
+@Version(strategy=VersionStrategy.VERSION_NUMBER, column="version")
+@Queries(#[
+	@Query(name = "find", language = "JDOQL",
+		value = "SELECT FROM domainapp.dom.modules.simple.SimpleObject"),
+	@Query(name = "findByName", language = "JDOQL",
+		value = "SELECT FROM domainapp.dom.modules.simple.SimpleObject WHERE name.indexOf(:name) >= 0")
+])
+@Unique(name="SimpleObject_name_UNQ", members = #["name"])
+@DomainObject(objectType = "SIMPLE")
+@DomainObjectLayout(bookmarking = BookmarkPolicy.AS_ROOT)
+entity SimpleObject {
+
+	@Column(allowsNull="false", length = 40)
+	@Title(sequence="1")
+	@Property(editing = Editing.DISABLED)
+	property String name {
+		event UpdateNameDomainEvent
+	}
+
+	@Action(domainEvent = UpdateNameDomainEvent)
+	action SimpleObject updateName {
+		@Parameter(maxLength = 40)
+            @ParameterLayout(named = "New name")
+		parameter String newName
+		body {
+			setName(newName)
+			this
+		}
+	}
+
+	action Object default0UpdateName {
+		body {
+			getName()
+		}
+	}
+
+    	action Object validateUpdateName {
+		parameter String name
+        	body {
+			if (name.contains("!"))
+        			TranslatableString.tr("Exclamation mark is not allowed")
+        		else null
+		}
+    	}
+
+	title {
+		TranslatableString.tr("Object: {name}", "name", name)
+	}
+
+}
+```
+
+**Key changes made:**
+
+1. **Removed the entire `repository` block** - This rule no longer exists in grammar_2
+2. **Moved `event UpdateNameDomainEvent` inside the `property name` block** - Events are now nested within properties
+3. **Converted all `action` declarations** to new syntax:
+   - Changed from `action updateName(...) { expression }` to `action Type name { parameter ... body { expression } }`
+   - Added explicit return type (SimpleObject, Object)
+   - Moved parameters inside the action block as `parameter` declarations
+   - Wrapped expressions in `body { }` blocks
+4. **Preserved all formatting, comments, and whitespace** as in the original

@@ -1,0 +1,43 @@
+Differences between Grammar 1 and Grammar 2 that affect the instance:
+
+- **Top-level structure changed**:  
+  Grammar 1: `Typescript` directly contains `interfacesAndClasses += (InterfaceDeclaration | ClassDeclaration | ModuleDeclaration )*;`  
+  Grammar 2: `Typescript` contains `interfacesAndClasses=InterfacesAndClasses;` where `InterfacesAndClasses` is `(modules+=ModuleDeclaration | types+=Declaration)*;`  
+  → Your instance already uses only `module ... { ... }`, so it still fits (as `modules+=ModuleDeclaration*`).
+
+- **Module element content changed**:  
+  Grammar 1 `ModuleElement.moduleContent` allowed `ClassDeclaration | InterfaceDeclaration | ModuleDeclaration | ImportDeclaration`  
+  Grammar 2 `ModuleElement.moduleContent` allows `(Declaration | ModuleDeclaration | ImportDeclaration)` where `Declaration` wraps an `InterfaceOrClassDeclaration`.  
+  → Any `interface`/`class` inside a module is now parsed via `Declaration`.
+
+- **Interface/Class factoring changed**:  
+  Grammar 1: `InterfaceDeclaration` and `ClassDeclaration` each include their own `objectType` in the rule.  
+  Grammar 2: `InterfaceOrClassDeclaration: (InterfaceDeclaration | ClassDeclaration) objectType=ObjectType;`  
+  → The textual syntax for `interface X { ... }` remains the same; only the AST structure changed.
+
+- **TypeReference target broadened**:  
+  Grammar 1: references point to `[InterfaceDeclaration|QualifiedName]`  
+  Grammar 2: references point to `[InterfaceOrClassDeclaration|QualifiedName]`  
+  → No textual change needed for your `import Y = A;`.
+
+- **Doc comments added (optional)** and **docComment added in several places (optional)**.  
+  Per your rule (2), we do **not** instantiate them.
+
+- **ML_COMMENT terminal changed**:  
+  Grammar 2 defines `terminal ML_COMMENT : '/*'!'*' -> '*/';` which excludes `/** ... */` (reserved for `DocComment`) but still allows normal block comments like `/*var A = 1; */`.  
+  → Your existing `/*var A = 1; */` remains valid.
+
+### Instance 2 (modified to follow Grammar 2)
+
+No concrete textual changes are required; the same text conforms to Grammar 2 under the new `Declaration`/`InterfaceOrClassDeclaration` factoring and optional doc-comment additions (which we are not instantiating).
+
+```typescript
+module A { 
+ export interface X { s: string } 
+} 
+ 
+module B { 
+ /*var A = 1; */ 
+ import Y = A; 
+} 
+```

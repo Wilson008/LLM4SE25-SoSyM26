@@ -1,0 +1,37 @@
+=== Step 3: Instance Transformation ===
+Based on my analysis of the differences between grammar_1 and grammar_2, the good news is that **instance_1 can remain exactly the same** and will still conform to grammar_2.
+
+Here's why:
+
+1. **Structural compatibility**: 
+   - The new intermediate rules (`InterfacesAndClasses`, `Declaration`, `InterfaceOrClassDeclaration`) are all wrappers that don't require any new mandatory syntax
+   - The parsing path `module -> export interface -> ObjectType` remains valid
+
+2. **New optional elements not instantiated** (following rule #2):
+   - `DocComment` is optional (`docComment=DocComment?`) - not adding it
+   - The new wrappers don't introduce mandatory keywords or syntax
+
+3. **No syntax changes** for existing constructs:
+   - Module declarations syntax unchanged
+   - Interface declarations syntax unchanged
+   - Import declarations syntax unchanged
+   - Export keyword usage unchanged
+
+**instance_2 (unchanged from instance_1):**
+
+```
+module A { 
+ export interface X { s: string } 
+} 
+ 
+module B { 
+ /*var A = 1; */ 
+ import Y = A; 
+} 
+```
+
+The instance preserves:
+- All formatting (spaces, indents, tabs, empty lines)
+- The comment `/*var A = 1; */`
+- All mandatory elements (module, export, interface keywords, braces, semicolons, etc.)
+- The exact structure and whitespace of the original

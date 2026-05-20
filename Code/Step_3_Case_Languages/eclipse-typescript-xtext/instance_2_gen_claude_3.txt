@@ -1,0 +1,34 @@
+=== Step 3: Instance Transformation ===
+Based on my analysis of the differences between grammar_1 and grammar_2, I need to determine what changes are required for the instance.
+
+**Key differences that affect the instance:**
+
+1. **InterfacesAndClasses wrapper**: This is just a structural change in the grammar - doesn't affect syntax
+2. **Declaration wrapper with optional docComment**: The docComment is optional, so per rule #2, I should not add it
+3. **InterfaceOrClassDeclaration**: Structural change - doesn't affect syntax
+4. **ObjectType position**: Moved from InterfaceDeclaration to InterfaceOrClassDeclaration, but syntax remains the same
+5. **TypeMember with optional docComment**: The docComment is optional, so I should not add it
+6. **DocComment support**: All docComments are optional, so per rule #2, I should not instantiate them
+
+**Conclusion:**
+
+Looking at the instance syntax requirements, all the grammar changes are either:
+- Structural reorganizations that don't change the concrete syntax
+- Optional elements (docComments) that should not be instantiated per rule #2
+
+The concrete syntax accepted by both grammars for this particular instance is identical. The instance uses only features that are syntactically the same in both versions.
+
+**instance_2 (conforming to grammar_2):**
+
+```
+module A { 
+ export interface X { s: string } 
+} 
+ 
+module B { 
+ /*var A = 1; */ 
+ import Y = A; 
+}
+```
+
+The instance remains unchanged because grammar_2's modifications are structural refactorings and optional feature additions that don't require any changes to existing valid instances.

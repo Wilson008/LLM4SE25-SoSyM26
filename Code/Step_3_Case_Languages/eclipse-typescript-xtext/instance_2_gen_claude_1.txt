@@ -1,0 +1,32 @@
+=== Step 3: Instance Transformation ===
+Looking at the differences between grammar_1 and grammar_2, I need to analyze what structural changes affect the instance:
+
+**Key Structural Changes:**
+1. The main structure now uses `InterfacesAndClasses` container instead of direct list
+2. `InterfaceDeclaration` and `ClassDeclaration` are wrapped in `Declaration` and `InterfaceOrClassDeclaration`
+3. `DocComment` is added as optional in several places (ModuleDeclaration, Declaration, TypeMember)
+4. `TypeMember` now has `docComment` and wraps signature in a `signature` attribute
+
+**Analysis:**
+- The instance structure remains fundamentally the same
+- DocComment is optional everywhere it appears, so we don't add it (per rule 2)
+- The wrapping via `Declaration` and `InterfaceOrClassDeclaration` doesn't change the concrete syntax
+- All terminal symbols and keywords remain identical
+- The parse tree structure changes internally but the textual representation stays the same
+
+**Result:**
+
+Since grammar_2's changes are primarily structural refactorings that don't affect the concrete syntax (all new elements like `InterfacesAndClasses`, `Declaration`, `InterfaceOrClassDeclaration` are transparent containers, and `DocComment` is optional), and following rule 3 to not miss or add any auxiliary information including comments and formats, instance_2 is:
+
+```
+module A { 
+ export interface X { s: string } 
+} 
+ 
+module B { 
+ /*var A = 1; */ 
+ import Y = A; 
+} 
+```
+
+The instance remains identical because grammar_2 doesn't introduce any mandatory new concrete syntax elements, and all structural changes are internal to the abstract syntax tree representation.

@@ -1,0 +1,36 @@
+=== Step 3: Instance Transformation ===
+Based on my analysis of the differences between grammar_1 and grammar_2, the good news is that **instance_1 remains valid for grammar_2 without any modifications needed**.
+
+Here's why:
+
+1. **Structural changes are backwards compatible**:
+   - The new `InterfacesAndClasses` wrapper is just an organizational change that doesn't affect syntax
+   - The `Declaration` wrapper and `InterfaceOrClassDeclaration` are refactorings that combine existing rules
+   - The `objectType` is still required in the same position
+
+2. **New optional elements should NOT be instantiated** (per your rule #2):
+   - `docComment` in ModuleDeclaration - optional, so don't add
+   - `docComment` in Declaration - optional, so don't add
+   - `docComment` in TypeMember - optional, so don't add
+   - DocComment and annotations - new features, so don't add
+
+3. **All mandatory elements are preserved**:
+   - Module syntax remains identical
+   - Export keyword usage is the same
+   - Interface declarations are unchanged
+   - Import declarations are unchanged
+
+Therefore, **instance_2 is identical to instance_1**:
+
+```
+module A { 
+ export interface X { s: string } 
+} 
+ 
+module B { 
+ /*var A = 1; */ 
+ import Y = A; 
+} 
+```
+
+All formatting, comments (`/*var A = 1; */`), whitespace, indents, and empty lines are preserved exactly as they were.
