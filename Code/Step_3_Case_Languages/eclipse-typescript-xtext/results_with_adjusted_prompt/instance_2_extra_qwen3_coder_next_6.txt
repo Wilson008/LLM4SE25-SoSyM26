@@ -1,0 +1,98 @@
+Let's carefully compare **Grammar 1** and **Grammar 2**, then transform **Instance 1** (valid under Grammar 1) into **Instance 2** (valid under Grammar 2), following all your constraints.
+
+---
+
+###  Step 1: Identify Key Grammar Changes Between Grammar 1 and Grammar 2
+
+We focus on **syntactic differences** that affect instance validity:
+
+| Aspect | Grammar 1 | Grammar 2 | Impact on Instance |
+|-------|-----------|-----------|--------------------|
+| **Top-level rule** | `interfacesAndClasses += (InterfaceDeclaration \| ClassDeclaration \| ModuleDeclaration)*` | `interfacesAndClasses = InterfacesAndClasses` -> `(modules += ModuleDeclaration \| types += Declaration)*` |  No syntactic change: `ModuleDeclaration` still allowed directly at top level; `Declaration` just wraps `InterfaceOrClassDeclaration`. So instance remains structurally compatible. |
+| **ModuleDeclaration** | `ModuleDeclaration`: no doc comment support |  Now supports optional `docComment=DocComment?` | -> Instance can keep doc comments *or omit them* (optional). So Instance 1 remains valid - no change needed. |
+| **InterfaceDeclaration** | `InterfaceDeclaration: "interface" name=Identifier extendClause=InterfaceExtendsClause? objectType=ObjectType;` | `InterfaceDeclaration: "interface" name=Identifier extendClause=InterfaceExtendsClause?;` -> `objectType=ObjectType` moved to **outer wrapper** `InterfaceOrClassDeclaration`. |  **Critical**: In Grammar 1, `objectType=ObjectType` is part of `InterfaceDeclaration`. In Grammar 2, it's **not** part of `InterfaceDeclaration` itself, but of the parent `InterfaceOrClassDeclaration` - *which includes `objectType=ObjectType`*. So the object body (`{ ... }`) is still required - just syntactically handled differently.  No change to instance syntax - `{ s: string }` still appears after `interface X`. |
+| **ClassDeclaration** | `ClassDeclaration: "class" name=Identifier ... objectType=ObjectType;` | `ClassDeclaration: "class" name=Identifier;` -> `objectType=ObjectType` moved to `InterfaceOrClassDeclaration`. | Same as above: body remains required, syntax unchanged. |
+| **ImportDeclaration** | `ImportDeclaration: "import" alias=Identifier "=" name=QualifiedName;` |  Same. | No change. |
+| **ModuleElement** | `moduleContent = ( ClassDeclaration \| InterfaceDeclaration /* \| ... */ \| ModuleDeclaration \| ImportDeclaration )` | `moduleContent = ( Declaration \| ModuleDeclaration \| ImportDeclaration )` |  In Grammar 2, `Declaration` is a new wrapper for `InterfaceOrClassDeclaration`, so `interface X { ... }` is now parsed as `Declaration -> InterfaceOrClassDeclaration -> InterfaceDeclaration`. Syntax remains identical - same keywords and structure. |
+| **DocComment & Annotations** |  Not supported in Grammar 1 |  Added in Grammar 2 | Since it's *optional* and Grammar 1 had no such support, we **must not add** doc comments to Instance 2 - per constraint #2: *do not instantiate optional/new rules*. So keep no doc comments. |
+| **TypeReference resolution** | `[InterfaceDeclaration|QualifiedName]` | `[InterfaceOrClassDeclaration|QualifiedName]` |  No syntactic impact - same qualified names still valid. |
+
+ **Conclusion on Mandatory Elements**:
+- All syntax elements in Instance 1 (`module`, `export`, `interface`, `X`, `{`, `s: string`, `import`, `Y = A`, `}`) remain syntactically valid in Grammar 2.
+- No new mandatory keywords or syntax introduced.
+- No removed constructs in Instance 1 - nothing needs to be *removed* (e.g., no legacy construct like `EnumDeclaration` was used).
+- Comments and whitespace may be preserved *exactly* (constraint #3).
+
+ BUT: **One subtle risk** - in Grammar 1, `ImportDeclaration` allowed `name = QualifiedName` where `QualifiedName = ID ('.' ID)*`.  
+In Instance 1: `import Y = A;` - `A` is a single `ID`, which is a valid `QualifiedName`.
+
+ In Grammar 2, `QualifiedName` is unchanged. So still valid.
+
+---
+
+###  Step 2: Apply Constraints to Transform Instance 1 -> Instance 2
+
+**Instance 1** (Grammar 1):
+```text
+module A { 
+ export interface X { s: string } 
+} 
+ 
+module B { 
+ /*var A = 1; */ 
+ import Y = A; 
+}  
+```
+
+Constraints to apply:
+1.  **Do not omit mandatory elements** - all keywords, braces, colons preserved.
+2.  **Do not instantiate optional/new rules** - no doc comments (Grammar 2's `DocComment` is optional, but we *must not add* them unless needed - and it's not needed).
+3.  **Preserve format exactly**: indentation, empty lines, comments, spacing.
+4.  **No removed constructs** - Instance 1 used only rules still present in Grammar 2 (`interface`, `module`, `import`, `export`).
+5.  Output must be non-empty.
+
+ Since *no grammar construct used in Instance 1 was deleted or made invalid*, and *Grammar 2 is a strict superset syntactically*, **Instance 1 is already valid in Grammar 2**.
+
+But - to be rigorous: in Grammar 2, the `objectType=ObjectType` moved up, but the **textual representation** of `interface X { ... }` is identical - the parser still expects the `{ ... }` right after `interface X`, and the `ModuleElement` still parses `interface X { s: string }` correctly via `Declaration`.
+
+Thus, the **minimal change** is: **none**.
+
+However, to guarantee Grammar 2 compatibility (especially if `InterfaceOrClassDeclaration` enforces `objectType` but does so via composition), we must ensure that the `{ ... }` body is still present - and it is.
+
+ So **Instance 2 = Instance 1**, verbatim.
+
+But wait: let's double-check for potential parser ambiguities or hidden expectations in Grammar 2.
+
+In Grammar 2:
+```xtext
+InterfaceDeclaration:
+    "interface" name=Identifier /* TypeParameters? */ extendClause=InterfaceExtendsClause?;
+```
+-> No `objectType` in this rule - but `InterfaceOrClassDeclaration` has:
+```xtext
+InterfaceOrClassDeclaration: (InterfaceDeclaration | ClassDeclaration) objectType=ObjectType;
+```
+So the AST will have the `objectType` at the *parent* node, not in `InterfaceDeclaration`. This does **not** change the textual syntax.
+
+>  Therefore, the text `interface X { s: string }` is still syntactically valid.
+
+Same for class (not used here), and for `ModuleElement`: `Declaration` expands to `docComment? InterfaceOrClassDeclaration`, and `InterfaceOrClassDeclaration` contains the `objectType`.
+
+So no textual change needed.
+
+---
+
+###  Final Answer: **Instance 2**
+
+```
+module A { 
+ export interface X { s: string } 
+} 
+ 
+module B { 
+ /*var A = 1; */ 
+ import Y = A; 
+}  
+```
+
+Let me know if you'd like a version with *optional doc comments removed explicitly*, or if you suspect other subtle differences - but per all constraints, this is the correct preserved instance.

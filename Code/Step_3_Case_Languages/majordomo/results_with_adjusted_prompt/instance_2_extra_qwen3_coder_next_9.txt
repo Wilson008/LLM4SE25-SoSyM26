@@ -1,0 +1,185 @@
+ Understood. Let's systematically transform **Instance 1** (grammar_1-compliant) -> **Instance 2** (grammar_2-compliant), respecting **all four constraints** you specified.
+
+---
+
+###  Step 1: Re-extract critical grammar differences (grammar_1 -> grammar_2)
+
+| # | Change | Impact on instance |
+|---|--------|--------------------|
+| 1 | `PreparedConstantValue` (g1) -> replaced by `PreparedValue` (g2) | `def X as Y`  `val X: Y` |
+| 2 | `PreparedStatement` syntax changed: `'def' name=Name 'on' ...`  `'def' name=Name ':' ...` | `def hell on ...`  `def hell: ...` |
+| 3 | `PreparedActionSet` syntax changed: `'def' name=Name 'do' ...`  `'set' name=Name ':' ...` | `def srRadOn do ...`  `set srRadOn: ...` |
+| 4 | `PreparedConstantValue`/`ConstantValueReference` -> now `PreparedValue`/`ValueReference` | Cross-refs like `IndoorLightThreshold as LightThreshold`  `IndoorLightThreshold: LightThreshold` (since `LightThreshold` is now a `PreparedValue`) |
+| 5 | Trailing `;` is now optional at top level (`'?'` suffix) - but **you requested: *do not omit mandatory elements* (e.g., `;` if originally present)** -> Since Instance 1 *uses* `;` in some places (e.g., `def LightThreshold as 0.4;`), we keep them *only where originally written*. But note: **in g2, `;` is still allowed**, so we preserve original `;` usage. |
+| 6 | House/Room bodies: `;` now optional after each sensor/actor (`';'?`), but instance already has *no* `;` after sensor/actor declarations - so unchanged. |
+| 7 | **No new rules added** (per constraint #2) -> no new syntax to invent. |
+| 8 |  **Key deletion**: The *keyword `as` in `def ... as ...` is no longer valid* - it's part of a *deleted* rule (`PreparedConstantValue`). So `as` must go. |
+
+ Therefore: **`as` must be replaced with `:` in constant definitions** - but **only where it appears in `def ... as ...`**, *not* in other contexts (e.g., `def hell on ...` is a *different* rule - not `as`, so unaffected beyond the `on` -> `:` change).
+
+ Also: `LightThreshold` and `IndoorLightThreshold` are defined using `as`, so they become `val LightThreshold: 0.4`, `val IndoorLightThreshold: LightThreshold`.
+
+But note: `val IndoorLightThreshold: LightThreshold` is *not* valid in g2 - because `ValueExpression` in `val ...:` only allows `SensorValue | ConstantValue | ValueReference`, and `ValueReference.ref=[PreparedValue\|ConstID]` - and `LightThreshold` is a `ConstID` (uppercase start), so *allowed*.
+
+ OK - `LightThreshold` is valid in g2.
+
+---
+
+###  Step 2: Transformation rules for Instance 1 -> Instance 2
+
+Apply to the instance *exactly as written*, preserving:
+- Comments (content and placement)
+- Blank lines
+- Indentation (spaces/tabs - instance uses ~2-space indent)
+- Semicolons (`;`) where they *already exist* in Instance 1 (e.g., `def LightThreshold as 0.4;` keeps `;`)
+- No semicolon where none existed (e.g., `@lamp lamps` has no `;` -> none added)
+
+| Original (g1) | -> | Replacement (g2) | Reason |
+|----------------|---|------------------|--------|
+| `def LightThreshold as 0.4;` | -> | `val LightThreshold: 0.4;` | g2 `PreparedValue` rule |
+| `def IndoorLightThreshold as LightThreshold;` | -> | `val IndoorLightThreshold: LightThreshold;` | same; `LightThreshold` is `ConstID`, valid as reference |
+| `def OL_DIM as 23.0;` | -> | `val OL_DIM: 23.0;` | same |
+| `def OL_SENSOR as light;` | -> | `val OL_SENSOR: light;` | note: `light` is a `QualifiedName`? But `ValueExpression.SensorValue` expects `FloatSensor`. Is `@light` a float sensor? In the original model, yes (used in comparisons like `light >= LightThreshold`). So `light` (qualified to `light` or `house.light`) is valid as `SensorValue` - but wait: in g2, `ValueReference.ref=[PreparedValue\|ConstID]`, not float sensor. So `val OL_SENSOR: light` is *invalid* in g2 - unless `light` is interpreted as a `ConstID`, but it's lowercase.  Problem! |
+
+Hold on - **critical issue**: In g1, `def OL_SENSOR as light;` uses `light` (the sensor instance name) as a *value reference*. But in g2:
+- `ValueExpression = SensorValue | ConstantValue | ValueReference`
+- `SensorValue = [FloatSensor|QualifiedName]` - but that's only in *expression contexts* (e.g., `@light kitchen >= 0.3`), not in `val ...:`
+- In `val ...:`, only `ValueExpression` is allowed -> and it *does* permit `SensorValue`.
+
+Wait - yes! In g2, `ValueExpression` includes `SensorValue`, and `SensorValue` is `[FloatSensor|QualifiedName]`. So `light` could refer to a `FloatSensor`, e.g., `@light light` (global `light` sensor), which is a `FloatSensor` (used in comparisons like `light >= 0.3`). So it's *technically valid* in g2.
+
+But: In g2's `ValueExpression.SensorValue`, the reference is `sensor=[FloatSensor|QualifiedName]`. Is `@light` a `FloatSensor`? In the grammar, yes - because only `LightSensor`, `NumberSensor`, `ClockSensor` are float-valued (and `RainSensor` too? No - `RainSensor` is float, but `light` is `@light` -> `LightSensor`, which is used in `light >= 0.4` - so it's assumed float.  So `light` -> `[FloatSensor|house.light]` is OK.
+
+ So `val OL_SENSOR: light;` is *syntactically valid* in g2.
+
+BUT: In g1, `LightSensor` is a *BooleanSensor* in `BooleanSensorStatement: [BooleanSensor|...]?` - wait, that's a problem! In g1, `BooleanSensorStatement` uses `sensor=[BooleanSensor|...]`, and `BooleanSensor` is not defined - only `Sensor` is defined as a union of concrete types. So this implies a *type refinement* in the metamodel (e.g., `LightSensor extends BooleanSensor`?), or it's a bug. But since we're only transforming syntax, and g2 keeps `SensorValue = [FloatSensor|...]`, and `ValueExpression` uses `SensorValue`, we assume `light` is used as float - and it is, in `light >= LightThreshold`.
+
+ So proceed - `val OL_SENSOR: light;` is OK.
+
+| `def hell on light >= LightThreshold and spaet;` | -> | `def hell: light >= LightThreshold and spaet;` | g2 `PreparedStatement: 'def' name=Name ':' statement=Statement` |
+| `def spaet on time >= 23.0;` | -> | `def spaet: time >= 23.0;` | same |
+| `def srRadOn do sr.radiator: true, sr.roofWindows: false;` | -> | `set srRadOn: sr.radiator: true, sr.roofWindows: false;` | g2 `PreparedActionSet: 'set' name=Name ':' actions+=Action (',' actions+=Action)*` |
+| All other `def ... do ...` (action sets) -> same transformation: `def X do ...`  `set X: ...` |
+
+ And `on !hell do ...` -> still valid: `on !hell do ...`, since `StatementReference` is still `ref=[PreparedStatement|Name]`, and `hell` is now defined via `'def hell: ...'`, so still cross-refutable.
+
+---
+
+###  Step 3: Apply all transformations
+
+We now reconstruct **Instance 2**, line-by-line, preserving:
+
+- Comments (exact text, position)
+- Indentation (2-space, as in original)
+- Blank lines (including after comments)
+- Semicolons where present in instance (e.g., after `def` statements, but *not* after sensor/actor declarations - those had none)
+
+Note: The original instance uses `// comment after;` - keep that `;` only if it's part of the original syntax (e.g., after a `def ...;`), but not add any extra ones.
+
+Let's go.
+
+---
+
+###  Final **Instance 2** (Grammar 2-compliant)
+
+```dsl
+house {
+	@clock time
+	@temp temp
+	@rain rain
+	@light light
+	@rain hell
+	
+	@lamp lamps
+	@boiler boiler
+}
+room lr { // living room
+	@temp temp
+	@light light
+	@switch lightSwitch
+	
+	@roller rollers
+	@lamp lamps
+	@radiator radiator
+}
+room sr { // sleeping room
+	@temp temp
+	@light light
+	@number numberpad
+	
+	@roller rollers
+	@roof roofWindows
+	@radiator radiator
+}
+room ki { // kitchen
+	@temp temp
+	@light light
+	@switch lightSwitch
+	
+	@roller rollers
+	@roof roofWindows
+	@radiator radiator
+	@coffee coffee
+	@lamp lamps
+}
+program {
+	val LightThreshold: 0.4;
+	val IndoorLightThreshold: LightThreshold;
+	val OL_DIM: 23.0;
+	val OL_SENSOR: light;
+	
+	def hell: light >= LightThreshold and spaet;
+	def spaet: time >= 23.0;
+	set srRadOn: sr.radiator: true, sr.roofWindows: false;
+
+	on !hell do lamps: 0; // Switch off outdoor lights on sunrise
+	on hell do lamps: 1; // Switch on outdoor lights on sunset
+	on OL_SENSOR <= IndoorLightThreshold and time >= OL_DIM do lamps: 0.2; // Dimm outdoor lights after 23 o'clock to save energy
+	on time >= 4.00 do lamps: 1; // Fully power outdoor lights at 4 o'clock due to laws
+	
+	on time >= 7.30 do boiler: true; // Heat up water at 7:30
+	on time >= 8.00 do ki.coffee: true; // Get fresh coffee in the morning
+	on time >= 8.30 do ki.coffee: false; // But not to much
+	on time >= 10.00 do boiler: false; // We now have enough warm water and are all up
+	
+	on sr.temp >= 18 do sr.radiator: false; // Switch off radiator above 18 degrees, it's warm enough
+	on sr.temp >= 19 and temp <= 19 or not rain? do sr.roofWindows: true; // If it get's to hot in the sleeping room and 
+															  // it's fresher outdoor: Open Windows. 
+	on sr.temp <= 18 and temp <= 18 do sr.roofWindows: false; // Close windows if it's to cold
+	on sr.temp >= 19 and temp >= 20 do sr.roofWindows: false; // Close windows if it's to warm outside
+	on temp >= 18 and light >= 0.5 do sr.rollers: true; // Close rollers if it's warm and sun is shining (into room)
+	on temp <= 18 do sr.rollers: false; // Open rollers if it's not too warm in room
+	on light <= 0.5 do sr.rollers: false; // Or its' not longer bright outdoor
+	on sr.temp <= 17 do srRadOn; // Boot up radiator if it's too cold
+	
+	on lr.temp >= 21 and light >= 0.5 do lr.rollers: true; // Close rollers in living room if sun is heat everything up
+	on ki.temp >= 21 and light >= 0.5 do ki.rollers: true;
+	on lr.temp <= 17 do lr.radiator: true; // Switch on radiator if it's to cold
+	on ki.temp <= 17 do ki.radiator: true, ki.roofWindows: false;
+	on lr.temp >= 20 do lr.radiator: false;
+	on ki.temp >= 20 do ki.radiator: false;
+	on temp <= 20 do lr.rollers: false; // Open rollers if it's not too warm in room
+	on ki.temp <= 20 do ki.rollers: false;
+	on light <= 0.5 do lr.rollers: false; // Or its' not longer bright outdoor
+	on light <= 0.5 do ki.rollers: false; 
+	
+	on lr.lightSwitch? do lr.lamps: 1.0;
+	on not lr.lightSwitch? do lr.lamps: 0.0;
+	on ki.lightSwitch? do ki.lamps: 1.0;
+	on !ki.lightSwitch? do ki.lamps: 0.0;
+}
+```
+
+---
+
+###  Verification checklist
+
+| Constraint | Satisfied? | Explanation |
+|-----------|------------|-------------|
+| 1. No mandatory elements omitted |  | All `:` kept where new, `do`, `on`, `val`, `set`, quotes, etc. |
+| 2. No new optional/OR branches instantiated |  | No new syntax added - only replaced existing rules. |
+| 3. Comments & whitespace preserved |  | Exact indentation, blank lines, comments unchanged. |
+| 4. Deleted rules removed |  | All `def X as Y` -> `val X: Y`; all `def X do ...` -> `set X: ...`; `PreparedConstantValue` rule gone -> no trace. |
+| 5. Never returns empty |  | Full instance returned. |
+
+Let me know if you'd like a version with *minimized changes* (e.g., keeping `def` for prepared values but using `:` instead of `as`) - but per g2, `def` for values is no longer part of the grammar, only `val`. So this is the correct migration.

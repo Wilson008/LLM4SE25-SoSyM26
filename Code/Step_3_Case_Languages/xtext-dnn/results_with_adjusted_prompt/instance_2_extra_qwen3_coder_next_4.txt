@@ -1,0 +1,78 @@
+Based on the detailed comparison of **Grammar 1 -> Grammar 2**, and strictly following your five rules, here is the transformed **Instance 2** - a faithful evolution of **Instance 1** to conform to **Grammar 2**, with *zero omissions, additions, or structural changes* beyond what the grammar evolution requires.
+
+---
+
+###  Key transformations applied (aligned with your rules):
+| Grammar 1 -> Grammar 2 Change | Applied in Instance 2? | How |
+|------------------------------|------------------------|-----|
+| `'image-size'` -> `'imageSize'` |  | All `image-size`, `batch-size`, etc., converted to camelCase (no quotes changed, just keyword) |
+| `'caffe-path'` **mandatory** -> **optional** |  | Removed `caffe-path = "$CAFFE_HOME"` line - *no violation* because it's now optional; per Rule 1, we don't *add* new info, and per Rule 4, we drop required-if-optional fields only when grammar makes them optional (but since it's now *optional*, not deleted, we may choose to drop it - and per **Rule 4**, we must *remove* grammar rules that no longer exist - and `caffe-path` itself *still exists*, but now optional. However, per your instruction: "do not omit any mandatory elements" - and in Instance 1, `caffe-path` *was* mandatory. To avoid risk of omission, we *keep* it as optional - but wait!*  
+ Critical refinement: **Rule 5 says: "Never return an empty result"**, and **Rule 1 says: "do not omit any mandatory elements" - but in Grammar 2, `caffePath` is *optional*. Since Grammar 2 *relaxes* requirement, and Instance 1 *had* it, we *may* retain it - but per your Rule 4: *"If a grammar rule no longer exists in Grammar 2, you must remove all instances of that rule."*  
+Here, the *rule* `'caffe-path'` *still exists*, but with changed optionality. Since it's *not deleted*, and Instance 1 used it, **we retain it** - to avoid violating "do not omit any mandatory elements" in the *original* semantics *unless deleted*. But per Rule 4's spirit: only *fully deleted* rules must be removed.  
+-> Final decision: **Retain `caffePath` as optional**, but *remove quotes if any* (none here), keep value.
+
+ Confirmed: In Grammar 2, `'caffePath'` still exists (as optional), so **we keep it**.
+
+| `'branch' body: 'operation' REFERENCE` + `'type' REFERENCE` | -> `'eltwiseOperation' REFERENCE` only |  | Removed `type -> residual` (Rule 4: deleted grammar element - see `BranchBody` change)  
+| `'use-bias-term'` -> `'useBiasTerm'` |  | Renamed (and removed quotes/hyphens)  
+| `'use-global-stats'` -> `'useGlobalStats'` |  | Same  
+| `'final-layer'` -> `'finalLayer'` |  | Changed literal token from `'final-layer'` to `'finalLayer'`  
+| `branch` removed `type -> residual` - only `operation` remains |  | Omitted `type -> residual` - *exact* match to Grammar 2's `BranchBody` (Rule 4)  
+| All separators kept as `,` (grammar still uses `SEPARATOR = ','`) |  | Preserved commas in `dense [...]` list  
+| No changes to `in:`, `out:`, `name:`, `kernel-size` (now `kernelSize`) |  | `kernel-size` -> `kernelSize`  
+| Indentation, whitespace, comments, line breaks - preserved exactly |  | None added/removed  
+| `training-data-path`, `val-data-path`, `seed` absent in Instance 1 -> still absent (Grammar 2 didn't add them) |  | No extra fields added (Rule 2 & 3)
+
+---
+
+###  Final Output: **Instance 2** (conforming to Grammar 2)
+
+```xtext
+network "DemoNet" {
+	epochs = 10
+	batchSize = 50
+	imageSize = 28
+    imageChannels = 1
+    outputLabels = 10
+
+    caffePath = "$CAFFE_HOME"
+    outputPath = "/media/xpitfire/data/temp"
+
+	updater -> sgd
+	learningRate = 0.003
+
+	conv   (name: "c1" in:data out:64)     { kernelSize = 6 }
+    conv   (name: "c2" 		   out:32)     { kernelSize = 3 }
+	conv   (name: "c3"         out:32)     { kernelSize = 1 }
+
+	branch (name: "b1" in:"c3" out:32)     {
+		eltwiseOperation -> PROD
+
+		conv (name: "bc1"      out:32)     { kernelSize = 1 }
+		norm (name: "bn1")				   { useGlobalStats = true }
+		scale(name: "bs1") 				   { useBiasTerm = true }
+	}
+
+	pool   (name: "p1"         out:3)      { type -> MAX, stride = 1 }
+
+	dense [(name: "d1"         out:512), 
+	       (name: "d2"         out:256)]
+
+	dense  (name: finalLayer  out:labels)
+}
+```
+
+---
+
+###  Verification Checklist:
+- [x] No lines added or removed beyond structural evolution  
+- [x] All whitespace, indentation (`\t`), empty lines, and comment-style structure preserved  
+- [x] All enum values (`sgd`, `MAX`, `PROD`, etc.) unchanged (still valid per Grammar 2 enums)  
+- [x] `final-layer` -> `finalLayer` (Grammar 2: `LayerName: name=(STRING | 'finalLayer')`)  
+- [x] `branch` body no longer has `type` - matches Grammar 2's `BranchBody: 'eltwiseOperation' REFERENCE ...`  
+- [x] All `kernel-size` -> `kernelSize`, `use-bias-term` -> `useBiasTerm`, etc.  
+- [x] No optional/new fields added (e.g., no `seed`, no `trainDataPath`, etc.)
+
+This is the minimal, faithful evolution of Instance 1 into Instance 2 under Grammar 2 - satisfying all five constraints.
+
+Let me know if you'd like a diff view, JSON mapping, or validation against Grammar 2's parser AST!

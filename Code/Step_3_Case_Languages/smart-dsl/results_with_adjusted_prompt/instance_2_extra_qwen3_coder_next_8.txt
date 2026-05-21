@@ -1,0 +1,104 @@
+Understood. I will rigorously apply the 5 requirements to transform **Instance 1** (valid for Grammar 1) into **Instance 2** (valid for Grammar 2), based on the exact grammar evolution:
+
+###  Grammar Evolution Recap (Grammar 1 -> Grammar 2):
+1. **Deleted rule**: `Modifier` -> replaced entirely by `Validator`.
+2. **Keyword change in `Method`**: `modifiers:` -> `validators:`
+3. **List reference update**: `[Modifier]` -> `[Validator]`
+4. **Added new optional alternatives in `Contract` body**: `validators+=Validator | dataStores+=DataStore` (but `dataStores` is *new*, and per requirement #2, since `DataStore` is *optional* and appears in an `|`, we will *not* instantiate it unless required - and it isn't).
+5. All other elements (e.g., `Attribute`, `Event`, `Param`, `Output`, `DataType`, `version`, `hasReceive`, `ownership`, `description`) remain unchanged in syntax/usage.
+
+---
+
+###  Transformation of Instance 1 -> Instance 2
+
+#### Original Instance 1 (reproduced for reference):
+```
+Contract SimpleContract {
+	version: "v1.0.0"
+	hasReceive
+	ownership
+	modifiable total integer
+	
+	Modifier onlyOwner () {
+		message: "Only the contract owner can call this function."
+		validation: "msg.sender == owner"
+	}
+	
+	Modifier validNumber(x integer) {
+		message: "The number must be greater than 4"
+		validation: "x>4"
+	}
+	
+	method example (x integer, name string, lastname string) -> x integer, name string {
+		description: "This is a sample of method"
+		modifiers: onlyOwner, validNumber
+		events: XUpdated, NameUpdated 
+	}
+	
+	event XUpdated (x integer){
+		description: "Este evento es para notificar cuando el numero se ha actualizado"
+	}
+	
+	event NameUpdated(name string){
+		description: "Este evento es para notificar cuando el name se ha actualizado"
+	}
+}
+```
+
+#### Required edits per the grammar changes:
+- **All `Modifier` declarations** (lines with `Modifier ... { ... }`) must become `validator` declarations (same syntax otherwise).
+- **`modifiers:` keyword** in `Method` must become `validators:`.
+- No other changes - preserving exact indentation, whitespace, line breaks, comments (none present), punctuation, quotes, etc.
+
+ Note: We respect requirement #2: `DataStore` is optional/new and appears in an `|` in `Contract`, so we do *not* add any `dataStore` entries.
+
+ Requirement #3: Preserve *all* original formatting (tabs, spacing, line order).
+
+ Requirement #5: Even though the structure changes, this is a faithful *re-serialization* - no omissions, no additions.
+
+---
+
+###  Final Instance 2 (valid for Grammar 2)
+
+```
+Contract SimpleContract {
+	version: "v1.0.0"
+	hasReceive
+	ownership
+	modifiable total integer
+	
+	validator onlyOwner () {
+		message: "Only the contract owner can call this function."
+		validation: "msg.sender == owner"
+	}
+	
+	validator validNumber(x integer) {
+		message: "The number must be greater than 4"
+		validation: "x>4"
+	}
+	
+	method example (x integer, name string, lastname string) -> x integer, name string {
+		description: "This is a sample of method"
+		validators: onlyOwner, validNumber
+		events: XUpdated, NameUpdated 
+	}
+	
+	event XUpdated (x integer){
+		description: "Este evento es para notificar cuando el numero se ha actualizado"
+	}
+	
+	event NameUpdated(name string){
+		description: "Este evento es para notificar cuando el name se ha actualizado"
+	}
+}
+``` 
+
+---
+
+ Verification:
+- `Modifier` -> `validator`  (2 occurrences)
+- `modifiers:` -> `validators:`  (1 occurrence)
+- All `hasReceive`, `ownership`, `description`, event names, parameter types, and whitespace preserved exactly 
+- No `DataStore` added (per requirement #2) 
+
+Ready for the next step - let me know if you'd like to validate this against Grammar 2 programmatically, generate an Xtext parser test, or evolve further!

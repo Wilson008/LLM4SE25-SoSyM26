@@ -1,0 +1,175 @@
+Let's carefully walk through the requirements and analyze the **difference** between Grammar 1 and Grammar 2 - especially focusing on **what was added, changed, or removed** - and apply that to **Instance 1** to produce **Instance 2**.
+
+---
+
+###  Recap: Grammar 1 -> Grammar 2 Change
+
+#### Critical change (only one substantive change):
+
+| Element | Grammar 1 | Grammar 2 |
+|--------|-----------|-----------|
+| **`MongoProperty`** | `type=JvmTypeReference (many?='*')? name=ValidID;` | `(type=JvmTypeReference \| inlineType=MongoBean) (many?='*')? name=ValidID;` |
+
+So:
+-  **Grammar 2 adds a new alternative** in `MongoProperty`: you can now have `inlineType=MongoBean` (an *embedded/inline bean definition* as the type).
+-  **No rule was deleted** in Grammar 2 (all existing constructs remain).
+-  But per your instructions:
+  > **If grammar_2 adds a new grammar rule or a new attribute that is optional or in an "OR" relationship, then please do not instantiate it.**
+
+That means:  
+- We **must not introduce** any inline `MongoBean` definitions (e.g., `{ ... }`) - even though they're now *allowed*, they are *optional*, and your rule says: *if the new feature is optional/alternative in an "OR", do not use it in the evolved instance*.
+
+Also:
+> **Do not omit any mandatory elements, such as characters enclosed by single quotes**  
+> **Do not miss or add any auxiliary information (comments, whitespace, indentation, etc.)**
+
+> **Pay special attention to grammar rules that have been deleted**  
+-> But there are **no deleted rules** between Grammar 1 and Grammar 2 (all prior constructs are preserved). So no removal needed.
+
+---
+
+###  Conclusion for Instance Evolution:
+
+- **Instance 1 is fully compatible with Grammar 2** - all its syntax and semantics are covered in Grammar 2.
+- **We do *not* need to change anything** - no additions (like inline beans), no deletions (no obsolete constructs), no formatting changes.
+- Therefore, **Instance 2 = Instance 1**, *but* we must double-check for any *implicit* violations.
+
+Let's inspect **Instance 1** again, line by line, against Grammar 2's `MongoProperty`:
+
+```xtext
+String name
+Album* albums
+```
+-> `String` is a `JvmTypeReference`   
+-> `Album` is a `JvmTypeReference` referencing `mongobean Album`   
+-> `*` is preserved   
+-> Same for `Track* tracks`, `Duration duration`, etc.
+
+All properties use `type=JvmTypeReference`, never inline `MongoBean`. So **no new syntax is used**, and **none is prohibited**.
+
+Also verify:
+- `mongobean` keyword:  preserved.
+- Package declaration:  unchanged.
+- Comments (`/** ... */`):  preserved verbatim.
+- White space, indentation, empty lines:  preserved.
+- Semicolons? Wait - let's look closely:
+
+####  Critical detail: Semicolons!
+
+In **Instance 1**, look at property declarations:
+```xtext
+String name
+Album* albums
+String title
+int year 
+Track* tracks
+String title
+Duration duration
+int seconds
+```
+-> **No semicolons (`;`)** after property names.
+
+But check **Grammar 1 & 2** for `MongoProperty`:
+```xtext
+MongoProperty:
+    type=JvmTypeReference (many?='*')? name=ValidID;
+```
+-> **Yes!** There is a **`;`** (implied or explicit?) - **Wait - no.**
+
+ Let's look again at the grammar rules.
+
+In both Grammar 1 and Grammar 2:
+```xtext
+MongoProperty:
+    type=JvmTypeReference (many?='*')? name=ValidID;
+```
+This is **Ecore-style grammar notation**, where the trailing `;` is **not** part of the syntax - it's just the end of the rule definition in ANTLR-like DSL syntax.
+
+ So actual syntax has **no semicolon required** - the instance is correct.
+
+BUT: double-check if any other syntax demands `;` - e.g., operations have `{ ... }` and `body=XBlockExpression`, but they don't end with `;`.
+
+Also verify: In `Xbase`, expressions do not require `;`, so all good.
+
+ No syntax mismatch.
+
+---
+
+###  Final Decision:
+
+Since:
+- Grammar 2 **does not delete any rule** - only extends `MongoProperty` with an *optional* alternative.
+- Instance 1 uses **only the original, preserved alternatives** of `MongoProperty`.
+- All syntactic, structural, and auxiliary elements (whitespace, comments, indents, etc.) are preserved and valid.
+
+ **Instance 2 = Instance 1**, unchanged.
+
+However, to be absolutely rigorous per your instruction:
+
+> *"Do not omit any mandatory elements, such as characters enclosed by single quotes"*  
+-> There are **no single-quoted literal tokens** (like `'import'`, `'mongobean'`, etc.) missing or altered.
+
+> *"Do not miss or add any auxiliary information..."*  
+-> Exactly preserved.
+
+> *"Even if incomplete... never return an empty result."*  
+-> We return the exact instance.
+
+---
+
+###  Output: **Instance 2**
+
+```
+import java.util.*
+
+package org.musicdb {
+	/**
+	 * A musical performer
+	 */
+	mongobean Artist {
+		String name
+		Album* albums
+		
+		Iterable<Track> getOevre() {
+			albums.map[tracks].flatten
+		}
+	}  
+	 
+	/**
+	 * A record, CD, DVD or another collection of tracks
+	 */
+	mongobean Album {
+		String title
+		int year 
+		Track* tracks
+		
+		Duration getDuration() {
+			tracks.map[duration].reduce[Duration a, Duration b| a + b]
+		}
+	}
+	
+	mongobean Track {
+		String title
+		Duration duration
+	}
+	
+	mongobean Duration {
+		int seconds
+	
+		void fromString(String duration) {
+			val split = duration.split(':')
+			seconds = Integer::parseInt(split.get(0)) * 60 + Integer::parseInt(split.get(1))
+		}		
+		
+		String toString() {
+			Integer::toString(seconds / 60) + ':' + Integer::toString(seconds % 60)
+		}
+		
+		Duration operator_plus(Duration other) {
+			new Duration() [
+				seconds = this.seconds + other.seconds
+			]
+		}
+	}
+}
+```

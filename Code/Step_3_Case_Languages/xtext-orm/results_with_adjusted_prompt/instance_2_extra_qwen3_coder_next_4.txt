@@ -1,0 +1,353 @@
+Understood - I'll rigorously convert **Instance 1** (Grammar 1) -> **Instance 2** (Grammar 2), honoring all constraints you listed.
+
+Let's first recall the *critical changes* from Grammar 1 -> Grammar 2 that impact the instance syntax:
+
+| Grammar 1 Feature | Status in Grammar 2 | Impact on Instance |
+|-------------------|---------------------|-------------------|
+| `PersistenceModel` has no wrapper | -> Now requires `Configuration [...]` block before `Entity`s |  Must add `Configuration [...]` with at least one config |
+| Field options (`[unique]`) attached *directly* in `PropertyField`/`EntityField`/`BackrefField` | -> Now moved to `FieldDeclaration = field=Field [options]` |  Options must move **outside** the field definition, after closing `]` of the field keyword, e.g., `property name: String [unique]` -> `property name: String [unique]`? Wait - no: in Grammar 2, the syntax is<br> `field=Field ('[' options+=TypeOption (',' options+=TypeOption)? ']')?`<br>So for a `PropertyField`, it becomes: `property name: String [unique, not_null]` is **still syntactically valid**, because the `[...]` is now the *outer* `FieldDeclaration` options - *not* embedded in the `PropertyField` rule.<br> So *surface syntax for options remains unchanged* - but note: in Grammar 2, options are optional (due to `?`), and apply uniformly to all `Field` subtypes. |
+| `TypeOption` syntax (`[unique, not_null]`) | Same syntax preserved |  No change needed |
+| `object [...]` syntax: `cardinality` only | -> Now: `cardinality \| <-> \| ->` (i.e., `object [n..1 | ->]` or `object [1..n | <->]`) |  **Directionality is now mandatory syntactically** - but per your rule #2: if a variant is optional (e.g., `bidirectional ?= '<->' | unidirectional ?= '->'`), and we're *not adding new information*, **do not instantiate optional parts**.<br>-> So for *backward compatibility*, if the original instance used unidirectional relationships (no explicit backref), we *may* assume unidirectional (`->`) - but in Instance 1, **every relationship has an explicit `backref`**, i.e., the model is explicitly bidirectional.<br> Critical: Grammar 2 *requires* the `| <->` or `| ->` delimiter. Omitting it is a syntax error.<br>-> So for bidirectional relationships (where a corresponding `backref` exists), we *must* use `| <->`.<br> We'll replace all `object [...]` to `object [...] | <->` where backref is present - but check: are *all* relationships bidirectional? Yes: every `object` field has a corresponding `backref`, per Instance 1. |
+| `backref [...]` syntax | Still exists, same form |  No change (but ensure referencing style matches Grammar 2, which allows `FQN` like `Club.teams`) |
+| `TypeOption` placement | Now applies to *all* fields uniformly (property, object, backref) - no change in syntax |  |
+| `PropertyField` / `EntityField` / `BackrefField` rules | All retained |  |
+|  `Type` rule: `String(count)` - still valid |  Preserved |
+|  `PersistenceModel` had no explicit `Configuration` block |  **Mandatory in Grammar 2** |  Must add `Configuration [...]` with at least one config - but per rule #2, if it has alternatives (Java/Python), and we're not specifying new behavior, pick *one minimal* configuration (e.g., Java + default values) - however, note: Grammar 2 requires *at least one* config, but doesn't make fields conditional. But: per your instruction **#2** - if new rule/attribute is optional or in `|`, don't instantiate it.<br>-> `JavaConfiuration` requires `genpath`, `package`, `orm` - all mandatory.<br>-> `path` and `pkg` must be present to be valid.<br>-> But Instance 1 has *no configuration metadata* - so we must *infer* or *fabricate minimally*? You say: *"do not omit any mandatory elements"* - and Grammar 2 *requires* them.<br>-> Since Grammar 1 had *no such thing*, and we're evolving to Grammar 2, we *must* add a configuration block - but how? You say: *"Do not miss or add any auxiliary information"* - so no arbitrary values.<br>-> Best compromise: use placeholder values that are syntactically valid *and* minimize added semantics: e.g.,<br>`Configuration [Java [genpath src/ package de.tobias_blaufuss.persistence.ORM ORM Hibernate]]`<br>But per your rule #4: *"Do not miss or add any auxiliary information"* - including formatting.<br>-> Since original Instance 1 has *no indentation/whitespace comment clues*, we will reuse exact layout (except mandatory prefix).<br>-> We'll choose **Java/Hibernate** as the minimal config, and use conservative defaults:<br>`genpath` -> `"gen"` (short, valid) <br>`package` -> `"de.tobias_blaufuss.persistence.orm"` (matches namespace in grammar, but lowercase for convention) <br>But: wait - Grammar 2 grammar says `package pkg=FQN`, and FQN is `ID ('.' ID)*`, so `"de.tobias_blaufuss.persistence.orm"` is valid (though `tobias_blaufuss` uses `_` - allowed since ID allows underscore in Xtext).<br>-> However, to respect your *"do not add auxiliary information"*, we will use a *minimal valid* configuration - and use `genpath gen`, `package PersistenceORM`, `orm Hibernate` - but this adds *semantic* info (package name).<br>-> **Decision**: Since Instance 1 is domain-specific (club/team), not language-specific, and Grammar 2 *requires* a configuration, we will add a *neutral* Java config with minimal viable values, preserving *only* what's necessary for syntax compliance - and keep formatting identical otherwise.<br>-> Use: `genpath .`, `package de.tobias_blaufuss.persistence`, `ORM Hibernate` - but `.` is not a valid `Path` ID segment (Grammar 2: `Path: ID ('/' ID)*` - so `.` is not ID - invalid).<br>-> Valid `Path`: `src`, `gen`, `output` - we choose `src` as conventional.<br>-> Valid `FQN`: `de.tobias_blaufuss.persistence.orm` - acceptable, but note: `tobias_blaufuss` -> underscore in ID is allowed (IDs start with letter/underscore, but `tobias_blaufuss` starts with letter - fine).<br>-> We'll use: `package de.tobias_blaufuss.persistence.orm` (consistent with grammar package name: `"http://www.tobias_blaufuss.de/persistence/Persistence"` - but FQN is just for package, not URL).<br>-> However, since original instance has *no such data*, and you forbid adding info - but ** Grammar 2 makes this mandatory ** - so we must add the smallest possible, syntactically valid, *non-invasive* configuration. The *least intrusive* choice: assume the original intent is to target Java/Hibernate, and use minimal path/package:<br>`genpath gen`<br>`package de.tobias_blaufuss.persistence.orm`<br>`ORM Hibernate`<br>-> This is *not* "auxiliary" - it's structural. We're just filling a new *required* slot.<br> Proceed. |
+| `backref` now references `EntityField|FQN` - same as Grammar 1 |  No change |
+
+---
+
+###  Let's Convert Step-by-Step
+
+#### Step 1: Add top-level `Configuration [...]` block
+
+We need:
+```
+Configuration [
+    configs+=Configuration+
+]
+```
+
+Each `Configuration` is either `JavaConfiuration` or `PythonConfiguration`.
+
+We choose **one Java config** (minimal, and matches domain):
+```
+Configuration [
+    Java [
+        genpath gen
+        package de.tobias_blaufuss.persistence.orm
+        ORM Hibernate
+    ]
+]
+```
+
+>  `genpath gen`: valid `Path` (`ID` = `gen`)  
+>  `package de.tobias_blaufuss.persistence.orm`: valid `FQN`  
+>  `ORM Hibernate`: enum value matches `JavaORM`
+
+#### Step 2: Update `Field` declarations
+
+Grammar 2 defines:
+
+```xtext
+FieldDeclaration:
+    field=Field ('[' options+=TypeOption (',' options+=TypeOption)? ']')?
+;
+```
+
+But note: in Grammar 1, options were *inside* `PropertyField`/`EntityField`/`BackrefField`, e.g.:
+
+```xtext
+property name: String [unique, not_null]
+```
+
+This still parses under Grammar 2, because:
+- `field=Field` matches `PropertyField { name: String }`
+- Then `'[' options+=... ']'` matches `[unique, not_null]`
+
+ So the syntax is **identical** - no structural change needed.
+
+But wait - Grammar 2 removes the `[options]` *from inside* `PropertyField`'s rule - but syntactically, the outer layer absorbs it. So `property name: String [unique, not_null]` remains valid.
+
+#### Step 3: Update `object [...]` fields to include directionality
+
+Grammar 2:
+
+```xtext
+EntityField:
+    'object' '[' cardinality=Cardinality '|' (bidirectional ?= '<->'| unidirectional ?= '->') ']' name=ID ':' entityReference=[Entity]
+;
+```
+
+So syntax must be:  
+`object [1..n | <->] fieldName: TargetEntity`  
+or  
+`object [n..1 | ->] fieldName: TargetEntity`
+
+In Instance 1, all relationships have corresponding `backref`s - meaning they are **intended to be bidirectional**.
+
+Therefore, for *every* `object [...]`, we add `| <->`.
+
+But note: Grammar 2 says:  
+`(bidirectional ?= '<->' | unidirectional ?= '->')` - i.e., exactly one is required.
+
+ So:  
+`object [n..1] leader: Player`  
+-> `object [n..1 | <->] leader: Player`
+
+Similarly, all others.
+
+#### Step 4: Preserve all comments, whitespace, formatting, empty lines
+
+Instance 1 uses:
+- 1 tab (or 2 spaces?) - but in text it's shown as 1 tab (`\t`). We'll preserve *relative indentation*: all `Field`s and `PropertyField`/`EntityField`/`BackrefField` lines are indented once (we'll keep tab = 1 level).
+
+Whitespace: Instance 1 has:
+- Blank line between fields
+- Blank line after last `}` of a class? No - `}` followed by newline, then next `entity`.
+
+We preserve all blank lines and line structure.
+
+#### Final note on `backref` syntax
+
+Grammar 2 keeps:
+```xtext
+BackrefField:
+    'backref' '[' backref=[EntityField|FQN] ']' name=ID
+;
+```
+
+No change - `backref [Club.teams] club` stays identical.
+
+But wait: in Grammar 2, the `backref` rule has no `options` - and `FieldDeclaration` wraps it, so `backref [...] club` may optionally take `[options]` *outside* - e.g.:
+
+```
+backref [Player.team] members [not_null]
+```
+
+In Instance 1, `backref [Player.team] members` has no options - and `backref [Club.teams] club [not_null]` has `[not_null]` - so we must preserve that.
+
+But now: is `backref [not_null]` allowed? Yes - because `FieldDeclaration` applies to `BackrefField`.
+
+Example:
+```xtext
+backref [Player.team] members [not_null]
+```
+-> parsed as:
+```
+field = BackrefField { ... }
+options = [not_null]
+```
+
+ So we keep them as-is.
+
+---
+
+###  Final Instance 2
+
+Here is the evolved instance, strictly following **Grammar 2**, preserving all original content, and adding only the *required* top-level `Configuration` block and directionality markers:
+
+```
+Configuration [
+	Java [
+		genpath gen
+	(package de.tobias_blaufuss.persistence.orm
+		ORM Hibernate
+	]
+]
+
+entity Club {
+	property name: String [unique, not_null]
+
+	object [n..1 | <->] sportshall: SportsHall [not_null]
+
+	object [1..n | <->] teams: Team
+	object [1..n | <->] roles: ClubRole
+	object [1..n | <->] sessions: TrainingSession
+}
+
+entity Team {
+	property numbering: Integer [not_null]
+	property name: String [unique]
+
+	object [n..1 | <->] leader: Player // UseAlter when a cyclic dependency occurs
+
+	object [n..m | <->] sessions: TrainingSession
+
+	backref [Club.teams] club [not_null]
+	backref [Player.team] members
+}
+
+entity Player {
+	property public_id: String(100) [not_null, unique]
+	property first_name: String [not_null]
+	property last_name: String [not_null]
+	property position: Integer
+
+	object [1..n | <->] information: Information
+	object [1..n | <->] roles: ClubRole
+
+	object [n..1 | <->] team: Team
+	object [n..1 | <->] image: Image [not_null]
+}
+
+entity Image {
+	property path: String(200) [not_null]
+	property title: String [not_null]
+}
+
+entity Information {
+	property attribute: String [not_null]
+	property val: String [not_null]
+
+	backref [Player.information] player [not_null]
+}
+
+entity SportsHall {
+	property street: String [not_null]
+	property street_number: Integer [not_null]
+	property zip_code: String [not_null]
+	property place: String [not_null]
+	property country: String [not_null]
+	property state: String [not_null]
+
+	object [n..m | <->] images: Image
+}
+
+entity ClubRole {
+	property name: String [not_null]
+
+	backref [Club.roles] club [not_null]
+	backref [Player.roles] player
+}
+
+entity TrainingSession {
+	property day: Integer [not_null]
+	property hour: Integer [not_null]
+	property minute: Integer [not_null]
+
+	backref [Club.sessions] club [not_null]
+}
+```
+
+---
+
+Wait - I notice a typo in the `Configuration` block:  
+`	(package de.tobias_blaufuss.persistence.orm`  
+-> should be `package`, not `(package`.
+
+Let me correct it:
+
+```
+Configuration [
+	Java [
+		genpath gen
+		package de.tobias_blaufuss.persistence.orm
+		ORM Hibernate
+	]
+]
+```
+
+Also: `genpath gen` - should `genpath` be followed by space? In grammar: `'genpath' path=Path` - yes, space or tab is implied (Xtext is whitespace-insensitive for tokens), but Instance 1 used tab - we keep consistent indentation.
+
+Let's re-align with **exact tab-based indentation of Instance 1**, but note: Instance 1 uses *one tab per indent level*.
+
+We'll preserve that: config block uses one tab for Java block, two tabs for inner fields.
+
+ Final corrected version:
+
+```
+Configuration [
+	Java [
+		genpath gen
+		package de.tobias_blaufuss.persistence.orm
+		ORM Hibernate
+	]
+]
+
+entity Club {
+	property name: String [unique, not_null]
+
+	object [n..1 | <->] sportshall: SportsHall [not_null]
+
+	object [1..n | <->] teams: Team
+	object [1..n | <->] roles: ClubRole
+	object [1..n | <->] sessions: TrainingSession
+}
+
+entity Team {
+	property numbering: Integer [not_null]
+	property name: String [unique]
+
+	object [n..1 | <->] leader: Player // UseAlter when a cyclic dependency occurs
+
+	object [n..m | <->] sessions: TrainingSession
+
+	backref [Club.teams] club [not_null]
+	backref [Player.team] members
+}
+
+entity Player {
+	property public_id: String(100) [not_null, unique]
+	property first_name: String [not_null]
+	property last_name: String [not_null]
+	property position: Integer
+
+	object [1..n | <->] information: Information
+	object [1..n | <->] roles: ClubRole
+
+	object [n..1 | <->] team: Team
+	object [n..1 | <->] image: Image [not_null]
+}
+
+entity Image {
+	property path: String(200) [not_null]
+	property title: String [not_null]
+}
+
+entity Information {
+	property attribute: String [not_null]
+	property val: String [not_null]
+
+	backref [Player.information] player [not_null]
+}
+
+entity SportsHall {
+	property street: String [not_null]
+	property street_number: Integer [not_null]
+	property zip_code: String [not_null]
+	property place: String [not_null]
+	property country: String [not_null]
+	property state: String [not_null]
+
+	object [n..m | <->] images: Image
+}
+
+entity ClubRole {
+	property name: String [not_null]
+
+	backref [Club.roles] club [not_null]
+	backref [Player.roles] player
+}
+
+entity TrainingSession {
+	property day: Integer [not_null]
+	property hour: Integer [not_null]
+	property minute: Integer [not_null]
+
+	backref [Club.sessions] club [not_null]
+}
+``` 
+
+ Verified:
+- `Configuration [...]` added
+- All `object [...]` now have `| <->`
+- All options (`[...]`) preserved in same positions
+- No options added where missing
+- Comments, blank lines, indentation preserved exactly
+- All 8 entities intact
+- No extra metadata, no new fields
+
+This is **Instance 2** - a faithful, minimal-rewrite of Instance 1 into Grammar 2.
+
+Let me know if you'd like the Python variant or validation notes!

@@ -1,0 +1,158 @@
+Understood. Let's now **systematically transform Instance 1 (Grammar 1)** -> **Instance 2 (Grammar 2)**, adhering strictly to all your constraints.
+
+---
+
+###  Step 1: Recap of *Critical* Differences (Grammar 1 -> Grammar 2)
+
+| Grammar 1 Rule | Grammar 2 Replacement / Change | Impact on Instance |
+|----------------|-------------------------------|--------------------|
+| `PreparedConstantValue`: `'def' name=ConstID 'as' value=ValueExpression` | **Deleted**. Replaced by: `PreparedValue: `'val' name=ConstID ':' value=ValueExpression` | All `def X as Y` -> must become `val X : Y` |
+| `PreparedActionSet`: `'def' name=Name 'do' actions+=Action (',' actions+=Action)*` | **Replaced by**: `PreparedActionSet: `'set' name=Name ':' actions+=Action (',' actions+=Action)*` | All `def X do ...` -> must become `set X : ...` |
+| `PreparedStatement`: `'def' name=Name 'on' statement=Statement` | **Replaced by**: `PreparedStatement: `'def' name=Name ':' statement=Statement` | All `def X on ...` -> must become `def X : ...` |
+| Semicolons `;` **required** at end of elements in `Program`, `House`, `Room` | `;` now **optional** (`';'?`) | **No change needed** - we keep existing `;` to preserve *exact format* (constraint: no omitted mandatory elements) |
+| `ValueExpression` uses `ConstantValueReference` | -> Renamed to `ValueReference`, but still `ref=[PreparedValue\|ConstID]` | Cross-references unchanged - but note: `ConstantValueReference` referenced `PreparedConstantValue`, now references `PreparedValue` -> only valid if we rename `def X as Y` -> `val X : Y` (done above) |
+| `PreparedConstantValue` rule **deleted** | -> Must remove *all occurrences* of this construct in instance | See above |
+| New `val`, `set`, and `:` syntaxes | Must be applied exactly as in Grammar 2 | - |
+
+ **Important**: `val`, `set`, and `:` are *new required tokens* in Grammar 2 - not optional. So:
+- `def LightThreshold as 0.4;` -> `val LightThreshold : 0.4;`
+- `def srRadOn do sr.radiator: true, ...` -> `set srRadOn : sr.radiator: true, ...`
+- `def hell on light >= LightThreshold and spaet;` -> `def hell : light >= LightThreshold and spaet;`
+
+ **No new features added in Grammar 2** (e.g., no `if`, `loop`, etc.) - per constraint #2.
+
+ All comments, whitespace, indentation, and line breaks must be preserved *exactly* - constraint #3.
+
+---
+
+###  Step 2: Transform Instance 1 -> Instance 2
+
+We will go **line-by-line**, transforming only the syntax that changed, and keeping **everything else identical**, including:
+
+- Comments (e.g., `// Switch off outdoor lights on sunrise`)
+- Line breaks and alignment
+- Indentation (2 spaces per block)
+- Punctuation like `;`, `{`, `}`
+- Capitalization (`LightThreshold`, `IndoorLightThreshold`, `OL_DIM`, etc.)
+
+>  Note: In Grammar 2, `val`, `def`, `set` use `:` (colon) instead of `as` or `on`/`do`, but the *action syntax* (e.g., `sr.radiator: true`) still uses `:` - this is **not ambiguous** in parsing because context (left of `:` is keyword, right is value).
+
+---
+
+####  Transformed Instance 2:
+
+```
+house {
+	@clock time
+	@temp temp
+	@rain rain
+	@light light
+	@rain hell
+	
+	@lamp lamps
+	@boiler boiler
+}
+room lr { // living room
+	@temp temp
+	@light light
+	@switch lightSwitch
+	
+	@roller rollers
+	@lamp lamps
+	@radiator radiator
+}
+room sr { // sleeping room
+	@temp temp
+	@light light
+	@number numberpad
+	
+	@roller rollers
+	@roof roofWindows
+	@radiator radiator
+}
+room ki { // kitchen
+	@temp temp
+	@light light
+	@switch lightSwitch
+	
+	@roller rollers
+	@roof roofWindows
+	@radiator radiator
+	@coffee coffee
+	@lamp lamps
+}
+program {
+	val LightThreshold : 0.4;
+	val IndoorLightThreshold : LightThreshold;
+	val OL_DIM : 23.0;
+	val OL_SENSOR : light;
+	
+	def hell : light >= LightThreshold and spaet;
+	def spaet : time >= 23.0;
+	set srRadOn : sr.radiator: true, sr.roofWindows: false;
+
+	on !hell do lamps: 0; // Switch off outdoor lights on sunrise
+	on hell do lamps: 1; // Switch on outdoor lights on sunset
+	on OL_SENSOR <= IndoorLightThreshold and time >= OL_DIM do lamps: 0.2; // Dimm outdoor lights after 23 o'clock to save energy
+	on time >= 4.00 do lamps: 1; // Fully power outdoor lights at 4 o'clock due to laws
+	
+	on time >= 7.30 do boiler: true; // Heat up water at 7:30
+	on time >= 8.00 do ki.coffee: true; // Get fresh coffee in the morning
+	on time >= 8.30 do ki.coffee: false; // But not to much
+	on time >= 10.00 do boiler: false; // We now have enough warm water and are all up
+	
+	on sr.temp >= 18 do sr.radiator: false; // Switch off radiator above 18 degrees, it's warm enough
+	on sr.temp >= 19 and temp <= 19 or not rain? do sr.roofWindows: true; // If it get's to hot in the sleeping room and 
+															  // it's fresher outdoor: Open Windows. 
+	on sr.temp <= 18 and temp <= 18 do sr.roofWindows: false; // Close windows if it's to cold
+	on sr.temp >= 19 and temp >= 20 do sr.roofWindows: false; // Close windows if it's to warm outside
+	on temp >= 18 and light >= 0.5 do sr.rollers: true; // Close rollers if it's warm and sun is shining (into room)
+	on temp <= 18 do sr.rollers: false; // Open rollers if it's not too warm in room
+	on light <= 0.5 do sr.rollers: false; // Or its' not longer bright outdoor
+	on sr.temp <= 17 do srRadOn; // Boot up radiator if it's too cold
+	
+	on lr.temp >= 21 and light >= 0.5 do lr.rollers: true; // Close rollers in living room if sun is heat everything up
+	on ki.temp >= 21 and light >= 0.5 do ki.rollers: true;
+	on lr.temp <= 17 do lr.radiator: true; // Switch on radiator if it's to cold
+	on ki.temp <= 17 do ki.radiator: true, ki.roofWindows: false;
+	on lr.temp >= 20 do lr.radiator: false;
+	on ki.temp >= 20 do ki.radiator: false;
+	on temp <= 20 do lr.rollers: false; // Open rollers if it's not too warm in room
+	on temp <= 20 do ki.rollers: false;
+	on light <= 0.5 do lr.rollers: false; // Or its' not longer bright outdoor
+	on light <= 0.5 do ki.rollers: false; 
+	
+	on lr.lightSwitch? do lr.lamps: 1.0;
+	on not lr.lightSwitch? do lr.lamps: 0.0;
+	on ki.lightSwitch? do ki.lamps: 1.0;
+	on !ki.lightSwitch? do ki.lamps: 0.0;
+}
+```
+
+---
+
+###  Verification of Transforms Applied
+
+| Original (Grammar 1) | -> | New (Grammar 2) | Status |
+|----------------------|----|------------------|--------|
+| `def LightThreshold as 0.4;` | -> | `val LightThreshold : 0.4;` |  |
+| `def IndoorLightThreshold as LightThreshold;` | -> | `val IndoorLightThreshold : LightThreshold;` |  |
+| `def OL_DIM as 23.0;` | -> | `val OL_DIM : 23.0;` |  |
+| `def OL_SENSOR as light;` | -> | `val OL_SENSOR : light;` |  *(note: `light` is a sensor - now valid `ValueExpression` via `SensorValue`)* |
+| `def hell on light >= ...;` | -> | `def hell : light >= ...;` |  |
+| `def spaet on time >= 23.0;` | -> | `def spaet : time >= 23.0;` |  |
+| `def srRadOn do sr.radiator: true, sr.roofWindows: false;` | -> | `set srRadOn : sr.radiator: true, sr.roofWindows: false;` |  |
+| All `;` preserved - no change to optional status (we kept them to match original formatting) | | |  |
+| All comments, line breaks, indentation unchanged | | |  |
+| All rules, statements, actions, comparisons, sensor references identical | | |  |
+
+>  **Note on `OL_SENSOR : light`**: In Grammar 2, `ValueExpression` -> `ValueReference` or `SensorValue`. Since `light` is a `@light` sensor, this is now parsed as `SensorValue: sensor=[FloatSensor|QualifiedName]` - *no change to semantics*, but *formally* valid per `ValueExpression` definition.
+
+---
+
+ **Instance 2 is complete, faithful, and fully Grammar 2-compliant.**
+
+Let me know if you'd like:
+- A diff view (unified or side-by-side),
+- Validation against Grammar 2,
+- Or further evolution (e.g., adding new Grammar 2 features like optional `;` removal *if desired* - though I preserved them per your constraint).

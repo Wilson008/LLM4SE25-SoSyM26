@@ -1,0 +1,275 @@
+Understood! Let's carefully transform **Instance 1** (conforming to **Grammar 1**) into **Instance 2** (conforming to **Grammar 2**), following all your rules.
+
+---
+
+###  Recap of Key Grammar Changes (from Grammar 1 -> Grammar 2)
+
+| Grammar 1 | Grammar 2 | Consequence for Instance |
+|-----------|-----------|--------------------------|
+| `PersistenceModel: (entities+=Entity)+` | `PersistenceModel: 'Configuration' '[' configs+=Configuration+ ']' (entities+=Entity)+` | **Mandatory `Configuration` block must be added** at top level. But per your rule #2: *if a rule is optional or in an OR (`|`), don't instantiate*. However, `'Configuration' [...]` is **required** (not optional), and `configs+=Configuration+` is also mandatory (no `?`, no `[]`). So we **must** add at least one `Configuration`. But no example config exists in Instance 1 - and Grammar 2 introduces `JavaConfiguration` and `PythonConfiguration`. Since we're not told which to choose, and per rule #2, we should **not invent details** if the new rule is not present in the original instance. However, since `'Configuration' [...]` is syntactically mandatory and Grammar 2 *requires* at least one `Configuration`, we must include **a minimal valid `Configuration` block**. Since the original instance had no such config, and we are not allowed to omit it, we will choose the **simplest possible config** - but note: Grammar 2 *does not* allow empty `[]`. So we must provide at least one `Configuration`, and each `Configuration` has required fields (`genpath`, `package`, `orm`, etc.). But per rule #3: **do not add auxiliary info** (e.g., made-up paths/packages). So we have a conflict.
+
+    **Resolution**: Since rule #3 says *"do not miss or add any auxiliary information"*, and Grammar 2 *requires* a `Configuration` section that the original instance never had, we **must include it**, but we'll use **identical placeholder values as in the original DSL intent** - i.e., preserve *structure*, not invent semantics. Since the original was written for Java (e.g., backrefs like `Club.teams` resemble Hibernate-style bidirectional mapping), we choose **`JavaConfiguration`**, and use **minimal, syntactically required values** - but keep them as simple as possible *without adding arbitrary semantics*. We'll use `"genpath" src` and `"package" de.tobias_blaufuss.persistence.model`, `"orm" Hibernate`. This follows the original package name in the generate statement (`de.tobias_blaufuss.persistence`) and is conservative.
+
+| `Field` appeared directly in `Entity { ... }` | Now uses `fieldDeclarations+=FieldDeclaration+` where `FieldDeclaration: field=Field ('[' options+=TypeOption (',' options+=TypeOption)? ']')?` | **All inline options (e.g., `[unique, not_null]`) must be moved to after the `field` declaration**, and **`FieldDeclaration` syntax requires explicit wrapping** - but since options are now part of the declaration, the new syntax is:  
+`property name : String [unique, not_null]`  
+-> becomes  
+`field: property name : String [unique, not_null]`  
+Note: **The word `field:` is now required** in the new syntax. This is a syntactic change, not optional - so we must add it.  
+Also: options are still allowed *only* on `FieldDeclaration`, and only on the top-level `Field` (not embedded in `EntityField`/`PropertyField` syntax itself).  
+ So: each field gets prefixed with `field:` and options move to end.
+
+| `EntityField`: `'object' '[' cardinality ']' name ':' entityReference ['[options]']` | `EntityField`: `'object' '[' cardinality '|' (bidirectional '<->' \| unidirectional '->') ']' name ':' entityReference`  
+**No options allowed here** - all options moved to `FieldDeclaration`. | So in Instance 1, examples like:  
+`object [n..1] sportshall: SportsHall [not_null]`  
+-> becomes  
+`field: object [n..1 | ->] sportshall: SportsHall`  
+But note: `[not_null]` was an option on the field - now it goes to `FieldDeclaration`, i.e.,  
+`field: object [n..1 | ->] sportshall: SportsHall [not_null]`  
+ But Grammar 2 `FieldDeclaration` allows options *only* on the `Field` (via `field=Field [...]?`). So this is correct:  
+`field: object [...] name : Entity [not_null]`
+
+| `BackrefField`: `'backref' '[' backref=[EntityField|FQN] ']' name ['[options]']` | `BackrefField`: `'backref' '[' backref=[EntityField|FQN] ']' name`  
+**No options allowed** - again, all options moved to `FieldDeclaration`. | So:  
+`backref [Club.teams] club [not_null]`  
+-> `field: backref [Club.teams] club [not_null]`  
+ Still valid - options on outer declaration.
+
+| `TypeOption` placement was inline in `PropertyField`, `EntityField`, `BackrefField` | Now unified under `FieldDeclaration` - **all options (if any) apply to the entire field**, regardless of type |  Good - consistent. No loss - just repositioning.
+
+| `Cardinality` still same |  No change.
+
+| `FQN` still exists, same syntax |  No change.
+
+| `Configuration`, `JavaConfiuration`, `PythonConfiuration`, `Path`, `JavaORM`, `PythonORM` - **entirely new** | New rules -> must be present |  We add one `JavaConfiguration` with minimal valid values.
+
+| **Grammar 1 had no `field:` keyword** - `Field`s were direct children | Grammar 2 requires `field=` assignment in `FieldDeclaration` -> **`field:` must appear as a literal prefix** in the text |  This is a **critical syntax change**: all fields now start with `field:`. We must add this prefix.
+
+| Whitespace, line breaks, comments: preserved exactly per rule #3 | Must preserve - no addition/removal | We'll preserve original layout (indentation, blank lines, etc.) except where syntax requires insertion of `field:` and optional `| <->`/`->`.
+
+---
+
+###  Strategy for Transformation
+
+- Add top-level `'Configuration' '[' ... ']'` with one `JavaConfiguration`.
+- For each `Entity`, change:
+  - `fields+=Field+` -> `fieldDeclarations+=FieldDeclaration+`
+  - Each field gets prefixed with `field:`
+  - For `object` fields: add `| ->` or `| <->` (but Grammar 2 makes bidirectional vs unidirectional explicit).
+    -  Grammar 1 didn't distinguish direction - so how to decide?
+    - Rule #2: *if optional or in OR (`|`), do not instantiate* -> but here `'<->' | '->'` is in OR, so per rule #2 we **must not pick one** - i.e., **should we avoid adding direction entirely?**
+      -  But `EntityField` rule *requires* `|` + one of the two - no alternative without it.
+      - So this is a **syntax change that makes direction mandatory**, not optional. Thus, we *must* pick a direction.
+      - Since Grammar 1 used `backref` to declare inverse side explicitly, we can infer:
+        - If there is a corresponding `backref`, then the forward `object` is **unidirectional** (`->`) *or* **bidirectional** (`<->`) depending on whether inverse exists on the other side.
+      - In practice:
+        - `Club` -> `Teams`: bidirectional (because `Team` has `backref [Club.teams] club`)
+        - `Team` -> `Leader`: unidirectional? But `Player` has `backref [Player.team] team` - so actually **bidirectional**.
+        - In fact, *all* relationships in Instance 1 are bidirectional (every `object` has a corresponding `backref`).
+      -  So: **assume bidirectional (`<->`) for all `object` fields that have matching backrefs**.
+      - For `object` without backref? None in Instance 1 - all have backrefs.
+        - Let's double-check:  
+          - `Club.sportshall`: backref? `BackrefField` for `SportsHall.sportshall`? No - `SportsHall` has no `backref` for `sportshall`. So this one is **unidirectional**.
+          - `Player.information`: backref exists (`Information.player`).  
+          - `Player.roles`: backref (`ClubRole.club`, `ClubRole.player`).  
+          - `Team.sessions`: backref (`TrainingSession.club`).  
+          - `Club.sessions`: backref -> `TrainingSession.club`.  
+          - `Team.leader`: bidirectional (`Player.team`).  
+          - `Player.team`: bidirectional.  
+          - `SportsHall.images`: bidirectional (`Image` has no backref for `images` - wait! `Image` has no `backref [SportsHall.images]` - only `Club.images`? No: `SportsHall.images: Image`, and `Image` has no mention of `SportsHall`. So **unidirectional**.
+        - Let's verify all:
+          - `Club.sportshall: SportsHall` -> no `SportsHall` backref -> `->`
+          - `Club.teams: Team`  `Team.backref [Club.teams] club` -> `<->`
+          - `Club.roles: ClubRole`  `ClubRole.backref [Club.roles] club` -> `<->`
+          - `Club.sessions: TrainingSession`  `TrainingSession.backref [Club.sessions] club` -> `<->`
+          - `Team.leader: Player`  `Player.backref [Player.team] team` -> `<->`
+          - `Team.sessions: TrainingSession`  `TrainingSession.backref [Team.sessions] team`? Wait - no `backref [Team.sessions]` in `TrainingSession`! `TrainingSession` only has `backref [Club.sessions] club`. So **unidirectional**: `Team.sessions: TrainingSession` -> `->`
+          - `Player.information: Information`  `Information.backref [Player.information] player` -> `<->`
+          - `Player.roles: ClubRole`  `ClubRole.backref [Player.roles] player` -> `<->`
+          - `Player.team: Team`  `Team.backref [Player.team] members`? No - `Team` has `backref [Player.team] members`? Let's check Instance 1:
+            > `backref [Player.team] members` - yes, in `Team`.
+          - `Player.image: Image`  `Image` has no backref -> `->`
+          - `SportsHall.images: Image`  no `Image` backref -> `->`
+          - `ClubRole.name`, `TrainingSession.day`, etc. - no object fields.
+
+    So most are `<->`, but some are `->`. However, per rule #2, since the direction is chosen via `| <-> | ->`, and it's not optional, and we have *semantic knowledge* (from Instance 1 + inverse backrefs) to infer direction, we choose **based on presence of corresponding backref**.
+
+    However, note: Grammar 2 does *not* validate that bidirectional relationships are symmetric - it's just syntax. So we can decide per field.
+
+    But: per rule #2: *"if grammar_2 adds a new grammar rule or a new attribute that is optional or in an 'OR' relationship (i.e., |), then please do not instantiate it."*  
+    The `bidirectional ?= '<->' | unidirectional ?= '->'` is an OR, but it's not *optional* - the syntax *requires* one of them. So strictly, we *must* pick one. Since it's mandatory and not optional, and we have enough context, we will infer the most conservative direction based on the instance.
+
+    Given that `backref` declares the inverse side, and in Instance 1, if there is a `backref` *in the other entity* pointing back, then it's bidirectional - otherwise unidirectional.
+
+    Let's proceed accordingly.
+
+---
+
+###  Final Rules Recap for Instance Transformation
+
+1. Add top-level:
+   ```dsl
+   Configuration [
+     Java [
+       genpath src
+       package de.tobias_blaufuss.persistence.model
+       ORM Hibernate
+     ]
+   ]
+   ```
+
+2. For each field:
+   - Prefix with `field: `
+   - Keep `property`, `object`, `backref`
+   - For `object`: add `| <->` or `| ->` before `name`
+   - Move options (e.g., `[not_null]`) to after the full field declaration (as in `field: ... [not_null]`)
+   - Do *not* add new fields, omit existing ones, or change names or types.
+
+3. Preserve all original whitespace/indentation/line breaks.
+
+---
+
+###  Constructing Instance 2
+
+Let's transform each entity in order, preserving indentation (2-space indent in body, consistent with Instance 1), blank lines between entities, and no trailing spaces.
+
+#### Step 1: Add Configuration block
+
+#### Step 2: Process each `Entity`
+
+**Original:**
+```dsl
+entity Club {
+	property name: String [unique, not_null]
+	
+	object [n..1] sportshall: SportsHall [not_null]
+	
+	object [1..n] teams: Team
+	object [1..n] roles: ClubRole
+	object [1..n] sessions: TrainingSession
+}
+```
+
+-> **Transformed:**
+- `field: property name : String [unique, not_null]`  
+  (no direction needed for property - just keep as is)
+- `object [n..1] sportshall: SportsHall [not_null]`  
+  -> `object [n..1 | ->] sportshall: SportsHall [not_null]`  
+  (no backref in `SportsHall` -> unidirectional)
+- `object [1..n] teams: Team`  
+  -> `object [1..n | <->] teams: Team`  
+  (has `backref [Club.teams] club` in `Team`)  
+- Same for `roles` and `sessions`: bidirectional (`<->`)
+
+**Note**: Options stay on `FieldDeclaration`, e.g.,  
+`field: object [1..n | <->] teams: Team [unique]`  
+-> but original has no options on `teams`, so just:  
+`field: object [1..n | <->] teams: Team`
+
+ Now write it out.
+
+---
+
+###  Final Instance 2 (Grammar 2-Compliant)
+
+```dsl
+Configuration [
+  Java [
+    genpath src
+    package de.tobias_blaufuss.persistence.model
+    ORM Hibernate
+  ]
+]
+entity Club {
+	field: property name : String [unique, not_null]
+	
+	field: object [n..1 | ->] sportshall: SportsHall [not_null]
+	
+	field: object [1..n | <->] teams: Team
+	field: object [1..n | <->] roles: ClubRole
+	field: object [1..n | <->] sessions: TrainingSession
+}
+
+entity Team {
+	field: property numbering: Integer [not_null]
+	field: property name : String [unique]
+	
+	field: object [n..1 | <->] leader: Player
+	
+	field: object [1..n | ->] sessions: TrainingSession
+	
+	field: backref [Club.teams] club [not_null]
+	field: backref [Player.team] members
+}
+
+entity Player {
+	field: property public_id: String(100) [not_null, unique]
+	field: property first_name: String [not_null]
+	field: property last_name: String [not_null]
+	field: property position: Integer
+	
+	field: object [1..n | <->] information: Information
+	field: object [1..n | <->] roles: ClubRole
+	
+	field: object [n..1 | <->] team: Team
+	field: object [n..1 | ->] image: Image [not_null]
+}
+
+entity Image {
+	field: property path: String(200) [not_null]
+	field: property title: String [not_null]
+}
+
+entity Information {
+	field: property attribute: String [not_null]
+	field: property val: String [not_null]
+	
+	field: backref [Player.information] player [not_null]
+}
+
+entity SportsHall {
+	field: property street: String [not_null]
+	field: property street_number: Integer [not_null]
+	field: property zip_code: String [not_null]
+	field: property place: String [not_null]
+	field: property country: String [not_null]
+	field: property state: String [not_null]
+	
+	field: object [n..m | ->] images: Image
+}
+
+entity ClubRole {
+	field: property name: String [not_null]
+	
+	field: backref [Club.roles] club [not_null]
+	field: backref [Player.roles] player
+}
+
+entity TrainingSession {
+	field: property day: Integer [not_null]
+	field: property hour: Integer [not_null]
+	field: property minute: Integer [not_null]
+	
+	field: backref [Club.sessions] club [not_null]
+}
+```
+
+---
+
+###  Validation Checklist
+
+| Check | Status |
+|-------|--------|
+|  No grammar-1-only constructs remain (e.g., no `field` missing `field:` prefix) |  |
+|  All original `object` fields now have `| <->` or `| ->` |  |
+|  All options preserved (moved to `FieldDeclaration` level) |  |
+|  All backrefs preserved with `[...]` syntax unchanged |  |
+|  `backref` fields no longer have `[...]` options - all moved to declaration level ( `backref` in `FieldDeclaration` can have options: e.g., `[not_null]`) |  |
+|  No new fields added/omitted |  |
+|  `Configuration` block added with valid, minimal config |  |
+|  No comments, no extra whitespace, indentation preserved (2-space per level) |  |
+|  All `entity` bodies end with `}` |  |
+|  No trailing spaces or blank lines added (original had blank lines between fields and between entities - preserved) |  |
+
+---
+
+Let me know if you'd like a version with `PythonConfiguration` instead, or a version where I explicitly distinguish `->` vs `<->` differently - but this is the most faithful transformation per the rules.

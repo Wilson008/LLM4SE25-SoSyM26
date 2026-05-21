@@ -1,0 +1,120 @@
+Based on a detailed comparison of **Grammar 1** and **Grammar 2**, and strict adherence to your constraints, here is the **evolved Instance 2**, rewritten to conform to **Grammar 2**.
+
+>  **Constraint compliance checklist**  
+> - All original syntax, spacing, indentation, and comments preserved (none added/omitted except where grammar syntax *requires* structural change)  
+> - No optional/new features introduced (e.g., no `collection`, no `complete`, no `@Complete`)  
+> - No deleted grammar rules preserved (e.g., `IsisRepository`, `IsisRepository` body removed)  
+> - Mandatory `type` in `action` retained  
+> - `event` at top-level removed (as per G2 grammar - only allowed inside feature blocks)  
+> - `@Action(domainEvent = ...)` preserved as annotation (not as standalone `event`)  
+> - UI hints (`title`) retained  
+> - `body { ... }` feature used for action logic (G2 no longer has direct `XBlockExpression` as action body)  
+> - All Java annotations retained exactly  
+
+---
+
+###  **Instance 2 (conforming to Grammar 2)**
+
+```xtext
+package domainapp.dom.modules.simple
+
+import javax.jdo.annotations.Column
+import javax.jdo.annotations.DatastoreIdentity
+import javax.jdo.annotations.IdGeneratorStrategy
+import javax.jdo.annotations.IdentityType
+import javax.jdo.annotations.PersistenceCapable
+import javax.jdo.annotations.Queries
+import javax.jdo.annotations.Query
+import javax.jdo.annotations.Unique
+import javax.jdo.annotations.Version
+import javax.jdo.annotations.VersionStrategy
+import org.apache.isis.applib.annotation.Action
+import org.apache.isis.applib.annotation.ActionLayout
+import org.apache.isis.applib.annotation.BookmarkPolicy
+import org.apache.isis.applib.annotation.DomainObject
+import org.apache.isis.applib.annotation.DomainObjectLayout
+import org.apache.isis.applib.annotation.DomainServiceLayout
+import org.apache.isis.applib.annotation.Editing
+import org.apache.isis.applib.annotation.MemberOrder
+import org.apache.isis.applib.annotation.Parameter
+import org.apache.isis.applib.annotation.ParameterLayout
+import org.apache.isis.applib.annotation.Property
+import org.apache.isis.applib.annotation.SemanticsOf
+import org.apache.isis.applib.annotation.Title
+import org.apache.isis.applib.query.QueryDefault
+import org.apache.isis.applib.services.i18n.TranslatableString
+
+@PersistenceCapable(identityType=IdentityType.DATASTORE)
+@DatastoreIdentity(strategy=IdGeneratorStrategy.IDENTITY, column="id")
+@Version(strategy=VersionStrategy.VERSION_NUMBER, column="version")
+@Queries(#[
+	@Query(name = "find", language = "JDOQL",
+		value = "SELECT FROM domainapp.dom.modules.simple.SimpleObject"),
+	@Query(name = "findByName", language = "JDOQL",
+		value = "SELECT FROM domainapp.dom.modules.simple.SimpleObject WHERE name.indexOf(:name) >= 0")
+])
+@Unique(name="SimpleObject_name_UNQ", members = #["name"])
+@DomainObject(objectType = "SIMPLE")
+@DomainObjectLayout(bookmarking = BookmarkPolicy.AS_ROOT)
+entity SimpleObject {
+
+	@Column(allowsNull="false", length = 40)
+	@Title(sequence="1")
+	@Property(editing = Editing.DISABLED)
+	property String name
+
+	@Action(domainEvent = UpdateNameDomainEvent)
+	action String updateName (@Parameter(maxLength = 40)
+            @ParameterLayout(named = "New name") parameter String newName) {
+		body {
+			setName(newName)
+			this
+		}
+	}
+
+	action String default0UpdateName () {
+		body {
+			getName()
+		}
+	}
+
+	action TranslatableString validateUpdateName (parameter String name) {
+		body {
+			if (name.contains("!"))
+				TranslatableString.tr("Exclamation mark is not allowed")
+			else null
+		}
+	}
+
+	title {
+		TranslatableString.tr("Object: {name}", "name", name)
+	}
+
+}
+```
+
+---
+
+###  **Key Evolution Rationale (per your constraints)**
+
+| Original (G1) | Updated (G2) | Reason |
+|---------------|--------------|--------|
+| `repository { ... }` block with actions |  **Removed entirely** | `IsisRepository` rule deleted from `IsisEntity`; G2 does not support repositories inside entities. No fallback - removed as required. |
+| Top-level `event UpdateNameDomainEvent` |  **Removed** | `IsisEvent` is no longer allowed at `IsisEntity` top-level (only inside `property`, `collection`, `action` blocks). Instead, event association is handled via `@Action(domainEvent = ...)` annotation - preserved. |
+| `action updateName(...) { ... }` (no return type) | `action String updateName (...) { ... }` with `body { ... }` | G2 requires `type=JvmTypeReference` (mandatory) and moves body into `body` feature (via `IsisActionFeatureType.Body`). |
+| `parameter String newName` (in action arg) | `parameter String newName` | G2 action parameters now use `@parameter` keyword (via `IsisActionParameter` rule), while G1 allowed `@Parameter(...)` Java annotation alone. For compliance with G2 syntax *and* to avoid adding new constructs, we added the `parameter` keyword *only where syntactically required*, but preserved the Java `@Parameter(...)` annotation. However, **per Grammar 2**, the parameter declaration inside `IsisActionParameter` must be:  
+`=> (annotations+=XAnnotation* 'parameter') type=FullJvmFormalParameter`  
+-> So we inserted the literal keyword `parameter` before the type, per grammar - this is the minimal required addition to match G2 syntax. |
+| `action default0UpdateName() { ... }` | `action String default0UpdateName () { body { ... } }` | Same as above - return type added, body wrapped. Return type inferred from G1 body (`getName()` returns `String`) -> made explicit. |
+| `title { ... }` | Unchanged | `IsisUiHintType.Title` still valid in G2. |
+| All whitespace, indentation, imports, and Java annotations | Preserved exactly | Per your requirement #3. |
+
+---
+
+>  **Final Note**:  
+> The removal of `repository { ... }` is unavoidable - it is a deleted construct with no equivalent in Grammar 2. In real usage, repositories would be externalized as `IsisService`s, but since you asked for *only* instance transformation (not new constructs), we removed it cleanly.
+
+Let me know if you'd like:
+- A separate `IsisService` file to replace the removed `repository`
+- A version that minimally mocks the repository functionality (e.g., `action listAll` as top-level in entity via `@Action` - *if* permitted by G2 semantics)
+- A diff view showing exact line-by-line changes.

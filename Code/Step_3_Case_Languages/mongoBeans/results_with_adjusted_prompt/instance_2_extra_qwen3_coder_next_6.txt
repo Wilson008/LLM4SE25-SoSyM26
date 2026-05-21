@@ -1,0 +1,202 @@
+Thank you for the clear instructions.
+
+Let's carefully analyze:
+
+---
+
+###  Recap: Grammar 1 -> Grammar 2 Change (from earlier)
+
+- **Only change**:  
+  In `MongoProperty`, the rule changed from:  
+  ```xtext
+  type=JvmTypeReference (many?='*')? name=ValidID;
+  ```  
+  to:  
+  ```xtext
+  (type=JvmTypeReference | inlineType=MongoBean) (many?='*')? name=ValidID;
+  ```
+
+- **Critical implications**:
+  -  **No rule was deleted** - all grammar elements from Grammar 1 remain in Grammar 2.
+  -  `MongoBean` rule is **unchanged except for removing the `mongobean` keyword** - wait! Let's double-check:
+
+---
+
+###  Critical Correction: Look at `MongoBean` in both grammars
+
+#### Grammar 1:
+```xtext
+MongoBean:
+	'mongobean' name=ValidID '{'
+		features+=AbstractFeature*
+	'}';
+```
+
+#### Grammar 2:
+```xtext
+MongoBean:
+	name=ValidID '{'
+		features+=AbstractFeature*
+	'}';
+```
+
+ **The `'mongobean'` keyword is removed** from `MongoBean` in Grammar 2!
+
+This is a **major change** - it means:
+- In Grammar 1: `mongobean Artist { ... }`
+- In Grammar 2: `Artist { ... }`   **no `mongobean` keyword**
+
+So now we *must* apply Rule 4 from your instructions:  
+> **"When evolving the instance, pay special attention to grammar rules that have been deleted in the evolved grammar. If a grammar rule no longer exists in Grammar 2, you must remove all instances of that rule from the evolved instance."**
+
+Here, the `'mongobean'` keyword is **no longer part of the grammar** (its lexical requirement is removed), so **all occurrences of the literal `'mongobean'` must be removed** in Instance 2.
+
+Also, per your Rule 2:
+> **"If grammar_2 adds a new grammar rule or a new attribute that is optional or in an 'OR' relationship (i.e., |), then please do not instantiate it."**
+
+- The `(type=JvmTypeReference | inlineType=MongoBean)` is an OR - and since it's *optional* (only used when present), and we have no requirement to use the new `inlineType` capability, we **do not need to introduce any inline `mongobean { ... }` blocks**.  
+  -> Instance 2 may still use only `type=JvmTypeReference`.
+
+ So we *can* preserve all existing property references (e.g., `String name`, `Album* albums`) unchanged.
+
+---
+
+###  Step-by-step evolution of Instance 1 -> Instance 2
+
+**Instance 1** (Grammar 1 style):
+```mongobeans
+import java.util.*
+
+package org.musicdb {
+	/**
+	 * A musical performer
+	 */
+	mongobean Artist {
+		String name
+		Album* albums
+		
+		Iterable<Track> getOevre() {
+			albums.map[tracks].flatten
+		}
+	}  
+	 
+	/**
+	 * A record, CD, DVD or another collection of tracks
+	 */
+	mongobean Album {
+		String title
+		int year 
+		Track* tracks
+		
+		Duration getDuration() {
+			tracks.map[duration].reduce[Duration a, Duration b| a + b]
+		}
+	}
+	
+	mongobean Track {
+		String title
+		Duration duration
+	}
+	
+	mongobean Duration {
+		int seconds
+	
+		void fromString(String duration) {
+			val split = duration.split(':')
+			seconds = Integer::parseInt(split.get(0)) * 60 + Integer::parseInt(split.get(1))
+		}		
+		
+		String toString() {
+			Integer::toString(seconds / 60) + ':' + Integer::toString(seconds % 60)
+		}
+		
+		Duration operator_plus(Duration other) {
+			new Duration() [
+				seconds = this.seconds + other.seconds
+			]
+		}
+	}
+}
+```
+
+#### Transformations required:
+1. **Remove every occurrence of the literal `mongobean`** (including before each bean name).  
+    -> Replace `mongobean Artist {` with `Artist {`, etc.
+
+2. **Preserve all other content exactly**, including:
+   - Comments (documentation, empty lines, indentation, spacing)
+   - Package structure
+   - Property signatures (`String name`, `Album* albums`, etc.)
+   - Operations (e.g., `Iterable<Track> getOevre() { ... }`)
+   - Xbase syntax (`val`, lambdas `[...]`, static calls `Integer::parseInt`, etc.)
+
+3. Do **not** add any inline `mongobean { ... }` - keep properties as `type=JvmTypeReference`.
+
+4. No new features introduced - only removal of the `mongobean` keyword.
+
+---
+
+###  Final Instance 2 (Grammar 2-compliant)
+
+```mongobeans
+import java.util.*
+
+package org.musicdb {
+	/**
+	 * A musical performer
+	 */
+	Artist {
+		String name
+		Album* albums
+		
+		Iterable<Track> getOevre() {
+			albums.map[tracks].flatten
+		}
+	}  
+	 
+	/**
+	 * A record, CD, DVD or another collection of tracks
+	 */
+	Album {
+		String title
+		int year 
+		Track* tracks
+		
+		Duration getDuration() {
+			tracks.map[duration].reduce[Duration a, Duration b| a + b]
+		}
+	}
+	
+	Track {
+		String title
+		Duration duration
+	}
+	
+	Duration {
+		int seconds
+	
+		void fromString(String duration) {
+			val split = duration.split(':')
+			seconds = Integer::parseInt(split.get(0)) * 60 + Integer::parseInt(split.get(1))
+		}		
+		
+		String toString() {
+			Integer::toString(seconds / 60) + ':' + Integer::toString(seconds % 60)
+		}
+		
+		Duration operator_plus(Duration other) {
+			new Duration() [
+				seconds = this.seconds + other.seconds
+			]
+		}
+	}
+}
+```
+
+ This instance:
+- Obeys **Grammar 2** syntax (no `mongobean` keyword, all beans start with `ValidID`),
+- Contains **no inline beans** (we didn't introduce the optional `inlineType=MongoBean`),
+- Preserves **100% of documentation, whitespace, and structure**,
+- Retains all mandatory elements (`package`, `import`, braces, semicolons, parentheses, etc. - unchanged per instructions).
+
+Let me know if you'd like a validation trace or further variation!

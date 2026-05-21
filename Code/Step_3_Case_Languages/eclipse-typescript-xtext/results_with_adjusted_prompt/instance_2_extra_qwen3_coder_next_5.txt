@@ -1,0 +1,109 @@
+Let's carefully analyze the differences between **Grammar 1** and **Grammar 2**, and then evolve **Instance 1** -> **Instance 2**, following your five constraints strictly.
+
+---
+
+###  Step 1: Identify all changes relevant to *instance-level syntax* (i.e., things that affect the textual structure of valid instances)
+
+| Change | Grammar 1 | Grammar 2 | Impact on instance (if any)? |
+|--------|-----------|-----------|------------------------------|
+| **Top-level rule** | `Typescript: imports* + (Interface|Class|Module)*` | `Typescript: imports* + InterfacesAndClasses` (containing `modules += ModuleDeclaration | types += Declaration`) |  No change to valid *surface syntax* - both accept same module/interface/class layout. Instance structure remains valid. |
+| **ModuleDeclaration** | `docComment?` absent |  Added `docComment=DocComment?` | **But docComment is optional** -> no change needed per constraint #2. |
+| **Declaration abstraction** |  No `Declaration` rule - interfaces/classes appear directly |  New `Declaration` rule wrapping `InterfaceOrClassDeclaration` | **But `Declaration` is not a syntactic token** - it's an internal grammar rule. The *surface syntax* (`interface X { ... }`) remains identical. |
+| **InterfaceDeclaration** | `objectType=ObjectType` present directly |  `objectType=ObjectType` **removed** | Wait: In Grammar 1: `InterfaceDeclaration: "interface" name=Identifier ... extendClause? objectType=ObjectType;`<br>In Grammar 2: `InterfaceDeclaration: "interface" name=Identifier ... extendClause?;` - **and** `objectType` moved to `InterfaceOrClassDeclaration` (the parent of `Declaration`).<br> **Crucially**, the syntax `interface X { ... }` is *unchanged* - the `{ ... }` is still part of `ObjectType` inside `InterfaceOrClassDeclaration`. So no surface change. |
+| **ImportDeclaration** | Identical in both |  No change |  Same syntax. |
+| **ModuleElement** | `moduleContent=(ClassDeclaration | InterfaceDeclaration | ...)` | `moduleContent=(Declaration | ModuleDeclaration | ImportDeclaration)` | Again - `Declaration` is a *nonterminal*, not surface syntax. The text `export interface X { ... }` still appears directly. |
+| **TypeReference resolution target** | `[InterfaceDeclaration\|QualifiedName]` | `[InterfaceOrClassDeclaration\|QualifiedName]` | No surface effect - still uses `A` (qualified name), which is valid in both. |
+| **DocComment terminals added** |  None |  Added `DocComment`, `DOC_COMMENT_LINE`, `DOC_ANNOTATION_PREFIX`, etc. | But they are *optional* and **new** - per constraint #2, we *do not* add them unless present in the original instance. Instance 1 has **no doc comments**, so Instance 2 must also have none. |
+| **Deleted features?** | `InterfaceExtendsClause` & `ObjectType` present in both. No *deleted* syntax affecting Instance 1. | |  |
+
+ **Conclusion from analysis**:  
+- **Grammar 2 is a *refactoring* of Grammar 1's internal structure**, introducing abstractions (`Declaration`, `InterfaceOrClassDeclaration`) but **not changing any terminal-level syntax**.  
+- **Instance 1 remains syntactically valid for Grammar 2** *as-is* - no changes needed to satisfy grammar rules.
+
+BUT: you requested to **evolve** Instance 1 -> Instance 2, *addressing* grammar differences, and *not omitting mandatory elements*. Let's double-check Instance 1 for conformance.
+
+---
+
+###  Step 2: Validate Instance 1 against both grammars
+
+**Instance 1** (Grammar 1):
+```
+module A { 
+ export interface X { s: string } 
+} 
+ 
+module B { 
+ /*var A = 1; */ 
+ import Y = A; 
+}  
+```
+
+Let's check each part:
+
+| Construct | Grammar 1 validity | Grammar 2 validity | Notes |
+|---------|--------------------|--------------------|-------|
+| `module A { ... }` |  `ModuleDeclaration` with body |  Same surface syntax + optional `docComment` (none present - OK) | OK |
+| `export interface X { s: string }` |  `ModuleElement`: `exported?="export"? moduleContent=InterfaceDeclaration`<br>`InterfaceDeclaration`: `"interface" name=Identifier extendClause? objectType=ObjectType` |  Same surface syntax.<br>`InterfaceOrClassDeclaration` -> `InterfaceDeclaration` + `ObjectType` inside -> syntax unchanged | OK |
+| Empty lines & indentation | - | - | Per constraint #3: *preserve exactly* - keep 2 empty lines, trailing space after `}` (see instance). |
+| `/*var A = 1; */` |  Comment - not grammar, just ignored by parser |  Same | Keep exactly |
+| `import Y = A;` |  `ImportDeclaration`: `"import" alias=Identifier "=" name=QualifiedName`<br>`A` is `ID` -> valid `QualifiedName` (ID -> ID) |  Same syntax | OK |
+
+ **Instance 1 is fully compatible with Grammar 2** - no change required.
+
+BUT: the task says *"modify instance_1 and get instance_2, which will follow grammar_2"* - and **constraint #4**: *"If a grammar rule no longer exists in Grammar 2, you must remove all instances of that rule from the evolved instance."*  
+However, **no grammar rule used in Instance 1 was deleted or invalidated**. All features appear in both grammars.
+
+So - per strict interpretation of the instructions - the *minimal correct* evolution is:
+
+>  **Instance 2 = Instance 1**, unchanged.
+
+But let's double-check: Did Grammar 2 *rename* or *reorder* any mandatory tokens?  
+- No. All keywords, punctuation (`{`, `}`, `:`, `=`, `;`), and structure (`interface`, `module`, `import`) remain identical.
+
+>  Therefore, per constraints #1-#5, **the only correct Instance 2 is a 1:1 copy of Instance 1**.
+
+Still - you said *"even if incomplete, never return an empty result"* - but this *is* complete.
+
+However, one subtle point:  
+In Grammar 2, `ModuleDeclaration` now has `docComment=DocComment?`, and `ModuleBody` uses `elements+=ModuleElement*`.  
+In Grammar 1, `ModuleDeclaration` had no `docComment`, but that's irrelevant - absence of doc comment is allowed.
+
+ Final decision: **Instance 2 is identical to Instance 1**, unchanged.
+
+But wait - let's read constraint #3 again:  
+> *"Do not miss or add any auxiliary information in the instance, e.g., comments, formats (white space, indents, tabs, empty lines, etc.)."*
+
+Instance 1 as given has:
+- Single space after `module`, `export`, etc.
+- Newlines between `module`s
+- Trailing space before `}` in first module? Let's count:
+
+```
+module A { 
+ export interface X { s: string } 
+} 
+ 
+module B { 
+ /*var A = 1; */ 
+ import Y = A; 
+}  
+```
+
+There is **one space before `}` in lines 2 and 3**, and **one space after `}` in line 3**. Let's preserve *exactly*.
+
+But - to be safe - we'll output the *identical* text.
+
+---
+
+###  Final Answer: **Instance 2**
+
+```
+module A { 
+ export interface X { s: string } 
+} 
+ 
+module B { 
+ /*var A = 1; */ 
+ import Y = A; 
+}  
+```

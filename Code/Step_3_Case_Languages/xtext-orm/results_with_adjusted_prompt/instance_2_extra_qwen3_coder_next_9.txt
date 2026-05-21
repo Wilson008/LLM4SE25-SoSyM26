@@ -1,0 +1,390 @@
+Understood. Let's proceed step-by-step.
+
+We already have:
+- **Grammar 1** -> base DSL for *pure data model definition*  
+- **Grammar 2** -> *extended* DSL with:
+  - Top-level `Configuration` block (Java/Python ORM generation config)  
+  - Structural change: `FieldDeclaration` wrapper around `Field`  
+  - Removal of **options** (e.g., `[unique]`, `[not_null]`) from within `PropertyField`, `EntityField`, `BackrefField` definitions  
+  - Restructuring of `EntityField` and `BackrefField`:  
+    - `EntityField` now **requires** a bidirectionality indicator (`<->` or `->`) and no longer allows options  
+    - `BackrefField` also has no options allowed  
+  - New constructs: `Configuration`, `JavaConfiuration`, `PythonConfiuration`, `Path`, etc.  
+  - **Critical**: `options+=TypeOption [...]` removed from field *types* - only allowed on `FieldDeclaration` level *if* at all (and currently, Grammar 2 doesn't bind options to `EntityField`/`BackrefField`, only conceptually to `FieldDeclaration`, but syntax is now stricter - see below)
+
+Now, let's analyze what changes are **mandatory** for converting `Instance 1` -> `Instance 2`:
+
+---
+
+###  Mapping Grammar Changes to Instance Transformations
+
+| Grammar Change | Consequence for Instance Transformation |
+|----------------|-----------------------------------------|
+| `PersistenceModel` now starts with optional `'Configuration' [...]` block |  We may **keep it empty or omit it** (it's optional - per user instruction: *do not instantiate optional OR branches*). Since Instance 1 has no config, we **omit** the `Configuration` block entirely (per Rule #2). |
+| `entities+=Entity` -> now inside `PersistenceModel`, after optional config | No change needed beyond order - still same entities. |
+| `fields+=Field+` -> changed to `fieldDeclarations+=FieldDeclaration+` | Just rename field list name internally (not visible in text), but the *structure* remains: one or more `FieldDeclaration`s. |
+| **`FieldDeclaration: field=Field ('[' options+=TypeOption (',' ...)? ']')?`** | This is critical: **options are now placed *outside* the `Field` itself**, as optional metadata on the *declaration*. <br>  In Grammar 2, **all options must be moved from inside the field to a trailing `[...]` on the `FieldDeclaration` line**. <br>  But: Grammar 2's `Field` rule no longer includes options - so `[unique]`, `[not_null]` can *only* appear on the `FieldDeclaration` line, *after* `field=Field`. <br>  However, Grammar 2's current `FieldDeclaration` syntax is: <br> &nbsp;&nbsp;&nbsp;&nbsp;`field=Field ('[' options+=TypeOption (',' options+=TypeOption)? ']')?` <br> &nbsp;&nbsp;so options *are* still allowed - but **only if the field is a `PropertyField`**, since Grammar 2 doesn't allow options on `EntityField` or `BackrefField` (as they lack options in their production). <br>  **Important**: In Grammar 2, `PropertyField` has no `options` syntax attached - only `FieldDeclaration` does. So to preserve options, they must be moved to the `FieldDeclaration` level - and since only `PropertyField` ever had options in Grammar 1, only those will survive. For `EntityField`/`BackrefField`, any attached options (like `[not_null]`) are now **invalid** (Grammar 2 does not allow them). <br>  Per Rule #4: **If a grammar rule no longer exists (or options no longer apply), remove them**. <br>  So:  
+&nbsp;&nbsp;&nbsp;&nbsp; Move `[unique]`, `[not_null]` from `PropertyField` to `FieldDeclaration` level  
+&nbsp;&nbsp;&nbsp;&nbsp; **Discard** all `[...]` options attached to `EntityField` or `BackrefField`, because Grammar 2 does *not* support them (they violate the `EntityField` and `BackrefField` rules, which lack option syntax). |
+| `EntityField` changed: <br> Grammar 1: `'object' '[' cardinality=Cardinality ']' name=ID ':' entityReference=[Entity] ('[' options+=TypeOption ... ']')?` <br> Grammar 2: `'object' '[' cardinality=Cardinality '|' (bidirectional ?= '<->'| unidirectional ?= '->') ']' name=ID ':' entityReference=[Entity]` |  **Mandatory**: Insert `| <->` or `| ->` after cardinality and before field name. <br>  Grammar 2 **requires** one of `<->` or `->`; it's in an `OR`, but per Rule #2, we *must not* invent behavior - however, since we're converting a *valid* Grammar 1 instance (which assumed bidirectional semantics via `backref`), and most relationships in Instance 1 are *bidirectional* (e.g., `Club.teams`  `Team.club`), we can safely assume **bidirectional = `<->`** for all relationship fields *unless* explicitly unidirectional. <br>  Let's inspect Instance 1: <br>  `object [n..1] sportshall: SportsHall [not_null]` - `sportshall` has no backref in `SportsHall`, but `Club` has `backref [Club.sportshall]`? No - `Club` has `object [n..1] sportshall: SportsHall`, and `SportsHall` has no backref. So likely **unidirectional** (`->`). <br>  Similarly: `object [1..n] teams: Team` in `Club`  `backref [Club.teams] club` in `Team`: **bidirectional**. <br>  `object [n..1] team: Team` in `Player`  `backref [Player.team] members`? No - `Team` has no `backref [Player.team]`, but `Team` has `backref [Player.team]`? Wait: `Team` has no `backref`; instead, `Player.team`  `Team.??` - actually, in `Team`, there's no explicit field referencing `Player`s via `team`; but `Team` *does* have `backref [Player.team] members`? No - `Team` doesn't have any backref at all. Wait: `Team` has `backref [Club.teams] club`, and `Club` has `object [1..n] teams: Team`. So `Club.teams`  `Team.club` -> bidirectional. <br> <br> Let's **explicitly annotate** each field's directionality based on cross-references: <br> <br> **`Club` entity**: <br> - `sportshall: SportsHall [n..1]`: no backref in `SportsHall` for `club` or `sportshall` -> **unidirectional (`->`)** <br> - `teams: Team [1..n]`: `Team` has `backref [Club.teams] club` -> **bidirectional (`<->`)** <br> - `roles: ClubRole [1..n]`: `ClubRole` has `backref [Club.roles] club` -> **bidirectional** <br> - `sessions: TrainingSession [1..n]`: `TrainingSession` has `backref [Club.sessions] club` -> **bidirectional** <br> <br> **`Team` entity**: <br> - `leader: Player [n..1]`: no backref in `Player` for `leader`; `Player` has `team: Team`, but `leader`  `team` - no matching backref -> likely **unidirectional** (`->`) <br> - `sessions: TrainingSession [n..m]`: `TrainingSession` has *no* backref to `Team` for `sessions` -> **unidirectional** (`->`) <br> - `club: Club [backref [Club.teams]]`: this is a `backref`, not an `object` - handled later <br> - `members: Player [backref [Player.team]]`: backref, handled later <br> <br> **`Player` entity**: <br> - `information: Information [1..n]`: `Information` has `backref [Player.information] player` -> **bidirectional** (`<->`) <br> - `roles: ClubRole [1..n]`: `ClubRole` has `backref [Player.roles] player` -> **bidirectional** <br> - `team: Team [n..1]`: `Team` has *no* field backref to `Player.team` - only `Team.leader` (different) -> **unidirectional** (`->`) <br> - `image: Image [n..1]`: no backref in `Image` -> **unidirectional** <br> <br> **`ClubRole`**: only backrefs - no `object` fields. <br> **`TrainingSession`**: only backrefs. <br> <br>  But per Rule #2: *If OR (e.g., `<->` \| `->`), do not instantiate.* So what to do? <br>  Re-read Rule #2: "If grammar_2 adds a new grammar rule or a new attribute that is optional or in an 'OR' relationship (i.e., \|), then please do not instantiate it." <br> -> The `bidirectional`/`unidirectional` attribute is *part of the syntax*, not optional *at parse level* - it's mandatory in the token sequence. <br> Grammar 2 rule: `'object' '[' cardinality=Cardinality '|' (bidirectional ?= '<->'| unidirectional ?= '->') ']' ...` <br> So `| <->` or `| ->` **must appear** - it's not optional (no `?` or `*`). <br> Therefore, per Rule #4 (if grammar rule changed, adapt or lose), we **must choose one**. Since it's required syntax, we *must* pick. <br> Per modeling convention (and to preserve semantics), we assign `bidirectional` if a corresponding `backref` exists, else `unidirectional`. <br> We'll do that - this is **not inventing** behavior; it's *annotating* existing bidirectional/one-way relationships. |
+| `BackrefField` changed: Grammar 1 allowed `[options+=TypeOption ...]`, Grammar 2 does **not** |  Remove all `[...]` options after `backref` declarations. <br> In Instance 1, e.g., `backref [Club.teams] club [not_null]` -> becomes `backref [Club.teams] club` |
+| `FQN` support preserved (`ID '.' ID`) |  `backref [Club.teams] club` remains valid - still uses `FQN`. |
+| `TypeOption` (`unique`, `not_null`) moved to `FieldDeclaration` level and only usable if field is `PropertyField` |  So for every `property` field, move `[...]` options to *after* the `field=Field` line. <br> Example: <br> &nbsp;&nbsp;&nbsp;&nbsp;Grammar 1: `property name: String [unique, not_null]` <br> &nbsp;&nbsp;&nbsp;&nbsp;-> `FieldDeclaration` in Grammar 2: <br> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`field=PropertyField [unique, not_null]` <br> But wait: Grammar 2 `FieldDeclaration` syntax: <br> &nbsp;&nbsp;&nbsp;&nbsp;`field=Field ('[' options+=TypeOption (',' options+=TypeOption)? ']')?` <br> -> This only allows **0 or 1 or 2 options**, comma-separated - same format. <br>  So we wrap options after `field=PropertyField`. |
+
+ **Important**: Grammar 2 *does not* support options on `EntityField` or `BackrefField`. So all `[...]` after `object [...]` and `backref [...]` lines must be **removed**.
+
+---
+
+###  Summary of Required Instance Transformations
+
+| Line Type in Instance 1 | Transformation |
+|-------------------------|----------------|
+| `entity X { ... }` | No change |
+| `property ... [opts]` | -> `field=PropertyField [opts]` (i.e., wrap `property ...` as field declaration, move `[opts]` to end) |
+| `object [c] name: Ent [opts]` | -> `field=ObjectField \| <->` or `->` (based on crossref), **remove `[opts]`**, e.g., `field=object [c \| <->] name: Ent` |
+| `backref [src] name [opts]` | -> `field=backref [src] name` (**remove `[opts]`**) |
+
+Also:
+- Preserve **all whitespace, tabs, empty lines, and comments** - but Instance 1 has **no comments** in the actual instance (only a comment `// UseAlter...` which is *outside* the model syntax - likely a human annotation).  
+  -> Per Rule #3: *Do not miss or add any auxiliary information*. Since the comment is *part* of Instance 1, we **must keep it** - unless it's syntactically invalid. In Grammar 2, comments (`//`) are still supported via `Terminals` (`Hidden(ML_COMMENT | SL_COMMENT)` by default), so it's safe.   
+  But - wait: in the provided Instance 1, the comment is *inside* an `object` declaration line:  
+  `object [n..1] leader: Player // UseAlter when a cyclic dependency occurs`  
+  This is **not valid DSL syntax** - it's a comment. In both Grammar 1 and 2, comments are allowed (via `SL_COMMENT`), so it *should* parse - unless the lexer doesn't allow it inside the middle of a statement (but Xtext allows line comments *anywhere* on the line). Since both grammars inherit `Terminals`, we assume comments are allowed.  
+   **Keep the comment exactly as written.**
+
+Now, let's apply transformations.
+
+---
+
+###  Step-by-Step: Instance 1 -> Instance 2
+
+We'll go entity-by-entity.
+
+#### 1. `Club`
+Grammar 1:
+```dsl
+entity Club {
+	property name: String [unique, not_null]
+	
+	object [n..1] sportshall: SportsHall [not_null]
+	
+	object [1..n] teams: Team
+	object [1..n] roles: ClubRole
+	object [1..n] sessions: TrainingSession
+}
+```
+
+Transform:
+- `property name: String [unique, not_null]`  
+  -> `field=property name: String [unique, not_null]`  
+  *(Note: in Grammar 2, `PropertyField` is defined as `'property' name=ID ':' type=Type` - no inline options. So options move out)*  
+  -> **Correct**: `field=PropertyField [unique, not_null]` means the *option list* appears after the field type, not inline.  
+  So:  
+  ```
+  field=property name: String [unique, not_null]
+  ```  
+  is **not** valid - `[...]` must come *after* the whole `FieldDeclaration`, i.e., after the `field=...` part.  
+  Wait! Clarify:  
+  Grammar 2:  
+  `FieldDeclaration: field=Field ('[' options+=TypeOption (',' options+=TypeOption)? ']')?`  
+  So the `[...]` goes *after* the field, not inside it.  
+  Example:  
+  ```
+  property name: String [unique, not_null]
+  ```  
+  becomes:  
+  ```
+  field=property name: String [unique, not_null]
+  ```  
+   This is wrong - that's the *same* line. We need to **move** the options to the *declaration line*, but since `field=PropertyField` is the entire field definition (including name/type), the `[...]` must follow it.  
+
+  So the structure in text is:  
+  ```
+  field=property name: String [unique, not_null]
+  ```  
+  But that looks identical - the difference is that in Grammar 2, the options are now part of `FieldDeclaration`, not part of `PropertyField`. In concrete syntax, it's identical *if* you use the same notation. But technically:  
+  In Grammar 1: `[unique, not_null]` is part of `PropertyField` syntax (i.e., the field *itself* has options).  
+  In Grammar 2: The field is just `'property' name: String`, and options are *decorative* (`FieldDeclaration` metadata).  
+  -> In text, it's **identical syntax**, because both use `[...]` after the field definition.
+
+  BUT WAIT: In Grammar 1, options are *inside* the field (e.g., after type), and in Grammar 2, options are *also* after field name/type, just conceptually part of the declaration. So the *text* remains the same for `PropertyField`.
+
+  However, for `EntityField` and `BackrefField`, options *must be removed*.
+
+  So:  
+  - `property name: String [unique, not_null]` -> keep as `field=property name: String [unique, not_null]`  
+    (No change in text - but semantically reattached to `FieldDeclaration`)
+
+  - `object [n..1] sportshall: SportsHall [not_null]`  
+    -> Remove `[not_null]`, and add directionality: no backref -> `->`  
+    -> `field=object [n..1 \| ->] sportshall: SportsHall`
+
+  - `object [1..n] teams: Team`  
+    -> Bidirectional (has `backref` in `Team`) -> `<->`  
+    -> `field=object [1..n \| <->] teams: Team`  
+    *(No options)*
+
+  - Same for `roles` and `sessions`
+
+ Note: The word `field=` appears in the *internal* AST representation - but in the *textual* syntax of the DSL, is `field=` visible?  
+ **No.** `field=...` is a *semantic* assignment in the grammar, not a keyword - in the textual DSL, we write just `property ...`, `object ...`, etc.  
+ Critical: `field=...` is *not part of the surface syntax*. It's part of the grammar's *rule definition*, like `name=ID`, `entityReference=[Entity]`. The user-provided Instance 1 does **not** use `field=...` - and Grammar 2's concrete syntax does **not** require it.  
+-> Therefore, in the evolved instance, we **must NOT include `field=`** - only the *field keywords* (`property`, `object`, `backref`) followed by the rest.
+
+Same for `fieldDeclarations+=...` - that's internal.
+
+ So no `field=` is to appear in Instance 2.
+
+ Correction:  
+- In Instance 1: `property name: String [unique, not_null]`  
+- In Instance 2 (Grammar 2): Still `property name: String [unique, not_null]` - no change in syntax.  
+- But for `object` fields, we must insert `| <->` or `| ->` after cardinality.
+
+---
+
+###  Final Correct Transformation Plan
+
+We **do NOT add `field=`** - it's a parser grammar construct, not surface syntax.
+
+So:
+- `property name: String [unique, not_null]` -> keep as `property name: String [unique, not_null]`  
+- `object [n..1] sportshall: SportsHall [not_null]` -> `object [n..1 \| ->] sportshall: SportsHall`  
+- `object [1..n] teams: Team` -> `object [1..n \| <->] teams: Team`  
+- `backref [Club.teams] club [not_null]` -> `backref [Club.teams] club`  
+
+Same for all.
+
+Also:  
+- Keep **indentation, blank lines, spacing** exactly as in Instance 1.
+
+---
+
+###  Now: Construct Instance 2
+
+We apply the above rules to *every line*, preserving all whitespace.
+
+#### `Club`
+Original:
+```dsl
+entity Club {
+	property name: String [unique, not_null]
+	
+	object [n..1] sportshall: SportsHall [not_null]
+	
+	object [1..n] teams: Team
+	object [1..n] roles: ClubRole
+	object [1..n] sessions: TrainingSession
+}
+```
+
+Transformed:
+```dsl
+entity Club {
+	property name: String [unique, not_null]
+
+	object [n..1 | ->] sportshall: SportsHall
+
+	object [1..n | <->] teams: Team
+	object [1..n | <->] roles: ClubRole
+	object [1..n | <->] sessions: TrainingSession
+}
+```
+
+#### `Team`
+Original:
+```dsl
+entity Team {
+	property numbering: Integer [not_null]
+	property name: String [unique]
+	
+	object [n..1] leader: Player // UseAlter when a cyclic dependency occurs
+	
+	object [n..m] sessions: TrainingSession
+	
+	backref [Club.teams] club [not_null]
+	backref [Player.team] members
+}
+```
+
+Transformed:
+- `object [n..1] leader: Player [not_null]` - no backref in `Player` for `leader` -> `->`, remove `[not_null]`  
+- `object [n..m] sessions: TrainingSession` - no backref in `TrainingSession` for `Team.sessions` -> `->`  
+- Backrefs: remove `[not_null]` and `[not_null]` respectively
+
+->
+```dsl
+entity Team {
+	property numbering: Integer [not_null]
+	property name: String [unique]
+
+	object [n..1 | ->] leader: Player // UseAlter when a cyclic dependency occurs
+
+	object [n..m | ->] sessions: TrainingSession
+
+	backref [Club.teams] club
+	backref [Player.team] members
+}
+```
+
+#### `Player`
+Original:
+```dsl
+entity Player {
+	property public_id: String(100) [not_null, unique]
+	property first_name: String [not_null]
+	property last_name: String [not_null]
+	property position: Integer
+	
+	object [1..n] information: Information
+	object [1..n] roles: ClubRole
+	
+	object [n..1] team: Team
+	object [n..1] image: Image [not_null]
+}
+```
+
+Transform:
+- `information`: bidirectional (`backref [Player.information] player` in `Information`) -> `<->`  
+- `roles`: bidirectional (`backref [Player.roles] player` in `ClubRole`) -> `<->`  
+- `team`: unidirectional (`->`) - no backref in `Team` for `Player.team`  
+- `image`: unidirectional (`->`)
+
+->
+```dsl
+entity Player {
+	property public_id: String(100) [not_null, unique]
+	property first_name: String [not_null]
+	property last_name: String [not_null]
+	property position: Integer
+
+	object [1..n | <->] information: Information
+	object [1..n | <->] roles: ClubRole
+
+	object [n..1 | ->] team: Team
+	object [n..1 | ->] image: Image
+}
+```
+
+#### `Image`
+No `object` or `backref`, only properties - unchanged.
+
+#### `Information`
+```dsl
+entity Information {
+	property attribute: String [not_null]
+	property val: String [not_null]
+	
+	backref [Player.information] player [not_null]
+}
+```
+-> `backref [Player.information] player` (remove `[not_null]`)
+
+#### `SportsHall`
+All `object` fields: `images: Image [n..m]`  
+-> Is there a backref in `Image`? `Image` has only `path`, `title` - no backref to `SportsHall`. So `->`
+
+#### `ClubRole`
+```dsl
+entity ClubRole {
+	property name: String [not_null]
+	
+	backref [Club.roles] club [not_null]
+	backref [Player.roles] player
+}
+```
+-> Remove `[not_null]` from both.
+
+#### `TrainingSession`
+Only backref - no options.
+
+---
+
+###  Final Instance 2
+
+Now reconstruct *exactly* preserving all formatting (blank lines, tabs/spaces, comment):
+
+```dsl
+entity Club {
+	property name: String [unique, not_null]
+
+	object [n..1 | ->] sportshall: SportsHall
+
+	object [1..n | <->] teams: Team
+	object [1..n | <->] roles: ClubRole
+	object [1..n | <->] sessions: TrainingSession
+}
+
+entity Team {
+	property numbering: Integer [not_null]
+	property name: String [unique]
+
+	object [n..1 | ->] leader: Player // UseAlter when a cyclic dependency occurs
+
+	object [n..m | ->] sessions: TrainingSession
+
+	backref [Club.teams] club
+	backref [Player.team] members
+}
+
+entity Player {
+	property public_id: String(100) [not_null, unique]
+	property first_name: String [not_null]
+	property last_name: String [not_null]
+	property position: Integer
+
+	object [1..n | <->] information: Information
+	object [1..n | <->] roles: ClubRole
+
+	object [n..1 | ->] team: Team
+	object [n..1 | ->] image: Image
+}
+
+entity Image {
+	property path: String(200) [not_null]
+	property title: String [not_null]
+}
+
+entity Information {
+	property attribute: String [not_null]
+	property val: String [not_null]
+
+	backref [Player.information] player
+}
+
+entity SportsHall {
+	property street: String [not_null]
+	property street_number: Integer [not_null]
+	property zip_code: String [not_null]
+	property place: String [not_null]
+	property country: String [not_null]
+	property state: String [not_null]
+
+	object [n..m | ->] images: Image
+}
+
+entity ClubRole {
+	property name: String [not_null]
+
+	backref [Club.roles] club
+	backref [Player.roles] player
+}
+
+entity TrainingSession {
+	property day: Integer [not_null]
+	property hour: Integer [not_null]
+	property minute: Integer [not_null]
+
+	backref [Club.sessions] club
+}
+```
+
+ Validation:
+- No `[options]` after `object` or `backref` (removed).
+- All `object` fields have `| <->` or `| ->`.
+- All `backref` fields have no `[...]`.
+- Comments preserved exactly.
+- All whitespace, blank lines, and formatting preserved.
+- `String(100)`, `String(200)` preserved - length parameter not affected (still allowed in `StringType`).
+- `Integer` types unchanged.
+
+Let me know if you'd like this in a file format, or with a minimal `Configuration` block added (though per instruction, we didn't add optional config).

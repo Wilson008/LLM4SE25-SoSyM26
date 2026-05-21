@@ -1,0 +1,79 @@
+Based on the analysis of **Grammar 1 -> Grammar 2**, and strictly adhering to your five constraints, here is the evolved instance:
+
+---
+
+###  **Key Changes from Grammar 1 to Grammar 2 (Recap Relevant to Instance Evolution)**
+
+| Grammar Change | Required Instance Adjustment |
+|----------------|------------------------------|
+| `Modifier` rule **deleted** in Grammar 2 |  All `Modifier` declarations and references must be removed or replaced - but per constraint #4, since `Modifier` is *replaced* by `Validator`, and `Validator` is new, we **must replace all `Modifier` usages with `Validator`** (not omit them), as `Validator` satisfies the same syntactic role (named, reusable validation blocks). |
+| `Method.modifiers:` -> `Method.validators:` |  Change keyword `modifiers:` to `validators:` |
+| `Modifier` -> `Validator` is a *semantic renaming*, not a deletion | So we do **not omit** the validation logic - we rename the block header. |
+| New `DataStore` rule is optional (in `|` group) |  We do **not add** any `DataStore` (constraint #2) |
+| No other new required fields |  Minimal change - preserve all other syntax, whitespace, comments, etc. |
+
+---
+
+###  **Evolution Steps Applied to `instance_1`**:
+
+1. Replace all occurrences of `Modifier` keyword with `validator`  
+   - `Modifier onlyOwner () {` -> `validator onlyOwner () {`  
+   - `Modifier validNumber(x integer) {` -> `validator validNumber(x integer) {`  
+
+2. In the `Method` block, change `modifiers:` -> `validators:`  
+   - `modifiers: onlyOwner, validNumber` -> `validators: onlyOwner, validNumber`  
+
+3. Preserve **all other syntax exactly**:
+   - Same indentation (tabs or spaces - instance uses spaces: 1 tab = 1 indent level, preserved as `	` -> we keep original indentation style)
+   - Same empty lines, comments, quotes, line breaks
+   - No added/removed punctuation (e.g., `{`, `}`, `(`, `)`, `:` remain unchanged)
+   - No comments added or removed (original instance has no inline comments; we keep it)
+
+---
+
+###  **Final Evolved Instance - `instance_2` (follows Grammar 2)**
+
+```xtext
+Contract SimpleContract {
+	version: "v1.0.0"
+	hasReceive
+	ownership
+	modifiable total integer
+	
+	validator onlyOwner () {
+		message: "Only the contract owner can call this function."
+		validation: "msg.sender == owner"
+	}
+	
+	validator validNumber(x integer) {
+		message: "The number must be greater than 4"
+		validation: "x>4"
+	}
+	
+	method example (x integer, name string, lastname string) -> x integer, name string {
+		description: "This is a sample of method"
+		validators: onlyOwner, validNumber
+		events: XUpdated, NameUpdated 
+	}
+	
+	event XUpdated (x integer){
+		description: "Este evento es para notificar cuando el numero se ha actualizado"
+	}
+	
+	event NameUpdated(name string){
+		description: "Este evento es para notificar cuando el name se ha actualizado"
+	}
+}
+```
+
+---
+
+ **Validation against constraints**:
+
+1.  No mandatory elements omitted - all quotes (`"..."`), keywords (`Contract`, `version:`, `hasReceive`, `ownership`, `method`, `event`, etc.), delimiters (`{`, `}`, `(`, `)`, `:`), and punctuation preserved exactly.  
+2.  No new optional/new-rule elements added (e.g., no `DataStore`, no new attributes).  
+3.  Formatting preserved: tabs (`	`) for indentation, blank lines between top-level declarations unchanged.  
+4.  `Modifier` rule (deleted in Grammar 2) fully replaced by `validator`, which is its grammatical successor.  
+5.  Output is non-empty and complete.
+
+Let me know if you'd like to generate `instance_3` (e.g., with `DataStore` usage) or perform validation tests.

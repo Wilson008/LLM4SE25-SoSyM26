@@ -1,0 +1,225 @@
+Let's carefully analyze the grammars and the instance, step by step.
+
+---
+
+###  Recap: Grammar 1 -> Grammar 2 Changes  
+Only **one meaningful change** was introduced in Grammar 2:
+
+#### `MongoProperty` Rule:
+- **Grammar 1**:
+  ```xtext
+  MongoProperty:
+    type=JvmTypeReference (many?='*')? name=ValidID;
+  ```
+- **Grammar 2**:
+  ```xtext
+  MongoProperty:
+    (type=JvmTypeReference | inlineType=MongoBean) (many?='*')? name=ValidID;
+  ```
+
+So:
+ Grammar 2 *extends* the options for `MongoProperty.type` - it now allows:
+- `JvmTypeReference` (unchanged, backward-compatible)
+- **OR** `MongoBean` (new, optional via `inlineType=MongoBean`)
+
+ No rule was *removed* in Grammar 2 - all other rules (e.g., `MongoBean`, `AbstractFeature`, `MongoOperation`, `PackageDeclaration`, etc.) remain syntactically identical.
+
+ `inlineType=MongoBean` is **optional** (it's part of a `(A | B)` choice, not a required field), and per your instruction (#2), if an option is in an "OR" and *optional*, we should **not instantiate it** unless necessary. So we will **not** introduce any inline `mongobean { ... }` inside property declarations - that would be an optional new feature, not a required evolution.
+
+ Rule `Import` exists in both -> unchanged.  
+ Rule `PackageDeclaration` exists in both -> unchanged.  
+ `MongoBean` exists in both - but wait! There is **one subtle difference**:
+
+#### `MongoBean` Rule:
+- **Grammar 1**:
+  ```xtext
+  MongoBean:
+    'mongobean' name=ValidID '{'
+      features+=AbstractFeature*
+    '}';
+  ```
+- **Grammar 2**:
+  ```xtext
+  MongoBean:
+    name=ValidID '{'
+      features+=AbstractFeature*
+    '}';
+  ```
+
+**CRITICAL DIFFERENCE**:  
+In **Grammar 1**, the keyword `'mongobean'` is **required** before the name.  
+In **Grammar 2**, the `'mongobean'` keyword has been **removed** - only the name and `{}` remain.
+
+ This is a *deleted token* in Grammar 2 (the `'mongobean'` terminal), and per instruction #4:
+> *When evolving the instance, pay special attention to grammar rules that have been deleted in the evolved grammar. If a grammar rule no longer exists in Grammar 2, you must remove all instances of that rule from the evolved instance.*
+
+ Here, the *terminal* `'mongobean'` is no longer part of the syntax - the keyword itself is gone.
+
+So in **Instance 1**, every occurrence of:
+```
+mongobean Artist {
+```
+must become:
+```
+Artist {
+```
+- because Grammar 2 expects just the name followed directly by `{`.
+
+ This is mandatory: we *must* remove `'mongobean'` to make it valid under Grammar 2.
+
+---
+
+###  Summary of Required Changes from Instance 1 -> Instance 2:
+| Element | In Grammar 1 | In Grammar 2 | Action |
+|--------|---------------|--------------|--------|
+| `'mongobean'` keyword | Present | **Removed** |  Remove **all** occurrences of `mongobean` (but keep `mongobean`-like semantics - just no keyword) |
+| `import java.util.*` | Allowed (in both) | Still allowed |  Keep |
+| `package ... { ... }` | Allowed (in both) | Still allowed |  Keep |
+| Comments (e.g., `/** ... */`) | Preserved in both | Preserved |  Keep - per #3, preserve formatting |
+| Indentation, line breaks, whitespace | Unchanged syntax | Unchanged |  Preserve exactly |
+| Properties: `Album* albums`, `Track* tracks` | `JvmTypeReference` only | Still valid (`type=JvmTypeReference`) |  Keep unchanged |
+| Operations: `getOevre()`, `getDuration()`, `operator_plus()` | Xbase blocks | Still valid |  Keep |
+| `many?='*'` | Present in both |  Still supported |  Keep |
+
+ **No new features (e.g., inline `MongoBean`) will be used**, per instruction #2.
+
+---
+
+###  Evolving Instance 1 -> Instance 2
+
+We start from:
+
+```instance_1
+import java.util.*
+
+package org.musicdb {
+	/**
+	 * A musical performer
+	 */
+	mongobean Artist {
+		String name
+		Album* albums
+		
+		Iterable<Track> getOevre() {
+			albums.map[tracks].flatten
+		}
+	}  
+	 
+	/**
+	 * A record, CD, DVD or another collection of tracks
+	 */
+	mongobean Album {
+		String title
+		int year 
+		Track* tracks
+		
+		Duration getDuration() {
+			tracks.map[duration].reduce[Duration a, Duration b| a + b]
+		}
+	}
+	
+	mongobean Track {
+		String title
+		Duration duration
+	}
+	
+	mongobean Duration {
+		int seconds
+	
+		void fromString(String duration) {
+			val split = duration.split(':')
+			seconds = Integer::parseInt(split.get(0)) * 60 + Integer::parseInt(split.get(1))
+		}		
+		
+		String toString() {
+			Integer::toString(seconds / 60) + ':' + Integer::toString(seconds % 60)
+		}
+		
+		Duration operator_plus(Duration other) {
+			new Duration() [
+				seconds = this.seconds + other.seconds
+			]
+		}
+	}
+}
+```
+
+Now remove **every occurrence of `mongobean`** (just the keyword, not the concept), while preserving all other tokens, whitespace, comments, and structure.
+
+ Step-by-step replacements:
+- `mongobean Artist {` -> `Artist {`
+- `mongobean Album {` -> `Album {`
+- `mongobean Track {` -> `Track {`
+- `mongobean Duration {` -> `Duration {`
+
+Note: There is **no** usage of `mongobean` elsewhere - it only appears as a keyword, never as an identifier or part of a name.
+
+Also: The `}` after `Artist` has extra spaces (`}` -> `}`) - keep exactly one space before `}` (as in original: `}`) and preserve blank lines.
+
+ Final Instance 2:
+
+```instance_2
+import java.util.*
+
+package org.musicdb {
+	/**
+	 * A musical performer
+	 */
+	Artist {
+		String name
+		Album* albums
+		
+		Iterable<Track> getOevre() {
+			albums.map[tracks].flatten
+		}
+	}  
+	 
+	/**
+	 * A record, CD, DVD or another collection of tracks
+	 */
+	Album {
+		String title
+		int year 
+		Track* tracks
+		
+		Duration getDuration() {
+			tracks.map[duration].reduce[Duration a, Duration b| a + b]
+		}
+	}
+	
+	Track {
+		String title
+		Duration duration
+	}
+	
+	Duration {
+		int seconds
+	
+		void fromString(String duration) {
+			val split = duration.split(':')
+			seconds = Integer::parseInt(split.get(0)) * 60 + Integer::parseInt(split.get(1))
+		}		
+		
+		String toString() {
+			Integer::toString(seconds / 60) + ':' + Integer::toString(seconds % 60)
+		}
+		
+		Duration operator_plus(Duration other) {
+			new Duration() [
+				seconds = this.seconds + other.seconds
+			]
+		}
+	}
+}
+```
+
+ **Verification**:
+- No `'mongobean'` keyword remains (satisfies #4)
+- No elements omitted (e.g., all fields, operations, comments preserved)
+- All whitespace/line breaks, indentation, blank lines, and inline spaces preserved exactly (e.g., `}  ` after `Artist` -> kept as `}` + 2 spaces, then newline)
+- No optional new features added (e.g., no `inlineType=MongoBean` usage - satisfies #2)
+- All `*` multiplicity markers, type references, Xbase expressions, and operators intact
+
+This is a valid instance under **Grammar 2**.
+
+Let me know if you'd like further validation (e.g., AST sketch or parsing test).

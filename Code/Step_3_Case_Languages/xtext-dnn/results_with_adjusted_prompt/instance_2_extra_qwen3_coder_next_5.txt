@@ -1,0 +1,75 @@
+Based on the analysis of **Grammar 2** vs **Grammar 1**, here is the **correctly evolved Instance 2** that conforms *exactly* to **Grammar 2**, preserving all formatting, whitespace, and structure of **Instance 1**, while applying only the required syntactic transformations per the grammar changes.
+
+>  **Rules applied (per your constraints)**:
+> - No mandatory elements removed (all `'network'`, `'{'`, `'}'`, `=`, `->`, commas preserved).
+> - New optional fields (e.g., `caffePath`) were *already present*, so made optional with `?` - but since it appears in Instance 1, we keep it (it's still allowed if provided).
+> - **Removed all references to deleted/changed grammar elements**:
+>   - `type -> residual` in `branch` -> **removed** (Grammar 2's `BranchBody` no longer has `type`).
+>   - `use-bias-term`, `use-global-stats` -> replaced with `useBiasTerm`, `useGlobalStats`.
+>   - `final-layer` -> replaced with `finalLayer`.
+>   - Hyphenated keywords -> camelCase (`batch-size` -> `batchSize`, etc.).
+> - No new optional fields added (e.g., we *do not* invent `trainDataPath`).
+> - Formatting (indentation, line breaks, alignment, tabs, comments) preserved *exactly*.
+
+---
+
+###  **Instance 2 (conforming to Grammar 2)**
+
+```dsl
+network "DemoNet" {
+	epochs = 10
+	batchSize = 50
+	imageSize = 28
+    imageChannels = 1
+    outputLabels = 10
+
+    caffePath = "$CAFFE_HOME"
+    outputPath = "/media/xpitfire/data/temp"
+
+	updater -> sgd
+	learningRate = 0.003
+
+	conv   (name: "c1" in:data out:64)     { kernelSize = 6 }
+    conv   (name: "c2" 		   out:32)     { kernelSize = 3 }
+	conv   (name: "c3"         out:32)     { kernelSize = 1 }
+
+	branch (name: "b1" in:"c3" out:32)     {
+		operation -> PROD
+
+		conv (name: "bc1"      out:32)     { kernelSize = 1 }
+		norm (name: "bn1")				   { useGlobalStats = true }
+		scale(name: "bs1") 				   { useBiasTerm = true }
+	}
+
+	pool   (name: "p1"         out:3)      { type -> MAX, stride = 1 }
+
+	dense [(name: "d1"         out:512), 
+	       (name: "d2"         out:256)]
+
+	dense  (name: finalLayer  out:labels)
+}
+```
+
+---
+
+###  Summary of key changes made (per Grammar 2 requirements):
+| Element in Instance 1 | Change | Grammar 2 justification |
+|------------------------|--------|--------------------------|
+| `batch-size` | -> `batchSize` | Grammar 2: `'batchSize'` (camelCase, no hyphen) |
+| `image-size` | -> `imageSize` | Same |
+| `image-channels` | -> `imageChannels` | Same |
+| `caffe-path` | -> `caffePath` | Same - still provided (grammar made it optional, but allowed) |
+| `use-bias-term` | -> `useBiasTerm` | `ScaleNormBody`: `'useBiasTerm'` (camelCase) |
+| `use-global-stats` | -> `useGlobalStats` | `BachNormBody`: `'useGlobalStats'` |
+| `type -> residual` | **removed entirely** | `BranchBody` in Grammar 2 has **no `type`** - only `'eltwiseOperation' REFERENCE operation=OperationType`. Since this line is *deleted* in grammar, we drop it *completely* (per constraint #4). |
+| `final-layer` | -> `finalLayer` | Grammar 2 `LayerName`: `'finalLayer'` (hyphen -> camelCase) |
+| `operation -> PROD` |  kept (no change needed) | `BranchBody` still has `eltwiseOperation` (mapped to `operation` in grammar) |
+| `output-labels` | -> `outputLabels` | Grammar 2: `'outputLabels'` |
+| `output-path` | -> `outputPath` | Same |
+| `caffePath` |  kept (still present, optional but allowed) | Grammar 2: `('caffePath' ...)?` - allowed |
+| All spacing, line breaks, alignment, tabs (`\t`), and commas preserved | - | Per constraint #3 |
+
+Let me know if you'd like:
+- A diff view,
+- A version with comments explaining each change,
+- Or validation against Grammar 2 (e.g., AST parsing simulation).

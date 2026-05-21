@@ -1,0 +1,110 @@
+Understood - I'll carefully evolve **Instance 1** (Grammar 1-compatible) into **Instance 2** (Grammar 2-compatible), strictly following your rules.
+
+###  Recap of Critical Grammar Changes (Grammar 1 -> Grammar 2)
+
+| Change | Impact on Instance |
+|-------|-------------------|
+|  `Modifier` rule **deleted** in Grammar 2 (replaced by `Validator`) | All `Modifier` declarations must be replaced with `Validator`. |
+|  In `Method`, `modifiers:` keyword **replaced** by `validators:` | All `modifiers: ...` -> `validators: ...` |
+|  Cross-reference changed: `[Modifier]` -> `[Validator]` | No impact on syntax in instance (references still by name), but must use `Validator` names |
+|  `validators+=Validator` added to `Contract` root | Must list `Validator`s explicitly (just like `Event`, `Method`, etc.) |
+|  `DataStore` rule **added** (optional, in `|`-branch of Contract body) | Per rule #2: **do not add** unless explicitly instantiated (and since it's optional, and no example provided, omit it) |
+|  `Validator` syntax identical to old `Modifier`, but prefixed with `'validator'` instead of `'Modifier'` | `Modifier foo() { ... }` -> `validator foo() { ... }` |
+
+All other syntax (whitespace, indentation, comments, order, quotes) must be preserved *exactly*, per your rules.
+
+---
+
+###  Step-by-Step Transformation of Instance 1
+
+Original Instance 1 (Grammar 1):
+```dsl
+Contract SimpleContract {
+	version: "v1.0.0"
+	hasReceive
+	ownership
+	modifiable total integer
+	
+	Modifier onlyOwner () {
+		message: "Only the contract owner can call this function."
+		validation: "msg.sender == owner"
+	}
+	
+	Modifier validNumber(x integer) {
+		message: "The number must be greater than 4"
+		validation: "x>4"
+	}
+	
+	method example (x integer, name string, lastname string) -> x integer, name string {
+		description: "This is a sample of method"
+		modifiers: onlyOwner, validNumber
+		events: XUpdated, NameUpdated 
+	}
+	
+	event XUpdated (x integer){
+		description: "Este evento es para notificar cuando el numero se ha actualizado"
+	}
+	
+	event NameUpdated(name string){
+		description: "Este evento es para notificar cuando el name se ha actualizado"
+	}
+}
+```
+
+#### -> Apply required changes:
+
+1. Replace each `Modifier ...` block with `validator ...`  
+   -> `Modifier onlyOwner ...` -> `validator onlyOwner ...`  
+   -> `Modifier validNumber ...` -> `validator validNumber ...`  
+
+2. Replace `modifiers: onlyOwner, validNumber` -> `validators: onlyOwner, validNumber`  
+   (keyword change; references remain same names, now pointing to validators)
+
+3. No changes to:
+   - `Contract`, `{`, `}`, keywords (`version:`, `hasReceive`, `ownership`, `method`, `event`, `description`, `->`)
+   - `Attribute` (`modifiable total integer`) - unchanged
+   - Whitespace, indentation, spacing, quotes, line breaks - preserved identically
+   - No `DataStore` added (optional, per rule #2)
+
+ Final Instance 2 (Grammar 2-compliant):
+
+```dsl
+Contract SimpleContract {
+	version: "v1.0.0"
+	hasReceive
+	ownership
+	modifiable total integer
+	
+	validator onlyOwner () {
+		message: "Only the contract owner can call this function."
+		validation: "msg.sender == owner"
+	}
+	
+	validator validNumber(x integer) {
+		message: "The number must be greater than 4"
+		validation: "x>4"
+	}
+	
+	method example (x integer, name string, lastname string) -> x integer, name string {
+		description: "This is a sample of method"
+		validators: onlyOwner, validNumber
+		events: XUpdated, NameUpdated 
+	}
+	
+	event XUpdated (x integer){
+		description: "Este evento es para notificar cuando el numero se ha actualizado"
+	}
+	
+	event NameUpdated(name string){
+		description: "Este evento es para notificar cuando el name se ha actualizado"
+	}
+}
+``` 
+
+ Validation:
+- All mandatory elements (`'validator'`, quotes, punctuation) preserved.
+- No `DataStore` added (optional, omitted per rule #2).
+- No auxiliary comments or formatting altered.
+- Only `Modifier` -> `validator` and `modifiers:` -> `validators:` changed, aligning exactly with grammar evolution.
+
+Let me know if you'd like to evolve this further (e.g., add `DataStore` declarations, or handle `array` type ambiguity)!

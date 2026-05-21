@@ -1,0 +1,146 @@
+Let's carefully transform **Instance 1** (grammar_1-compliant) into **Instance 2** (grammar_2-compliant), based on the grammar differences identified earlier.
+
+---
+
+###  Summary of **critical syntax changes** from Grammar 1 -> Grammar 2:
+
+| Grammar 1 construct | Grammar 2 equivalent | Action for transformation |
+|---------------------|----------------------|----------------------------|
+| `def name=ConstID 'as' value=ValueExpression` | `val name=ConstID ':' value=ValueExpression` | Replace `as` with `:` and prefix with `val` |
+| `def name=Name 'on' statement=Statement` | `def name=Name ':' statement=Statement` | Replace `'on'` with `':'` |
+| `def name=Name 'do' actions+=Action (',' actions+=Action)*` | `set name=Name ':' actions+=Action (',' actions+=Action)*` | Replace `'def' 'do'` with `'set' ':'` |
+| Semicolon after statement is **mandatory** (`;`) | Semicolon is **optional** (`;?`) | You may *keep* or *remove* `;` - but per instruction #3: **preserve original punctuation exactly**, including semicolons - so we **keep all existing `;`** (even if optional now) |
+| Semicolon after sensor/actor in `house`/`room` blocks is **not allowed** | Semicolon **allowed but optional** (`;?`) - and original instance had none, so we **keep no semicolons** in blocks |
+| No change to `on ... do ...` rules, `?` queries, `not`/`!`, qualified names, etc. |  Same syntax | Keep unchanged |
+
+>  Important: `PreparedConstantValue`, `PreparedStatement`, and `PreparedActionSet` are replaced by `PreparedValue` in Grammar 2. But in practice, `PreparedValue` is *polymorphic* - it covers constants, statements, and action sets. So we simply:
+> - Rename `def ... as ...` -> `val ... : ...`
+> - Rename `def ... on ...` -> `def ... : ...`
+> - Rename `def ... do ...` -> `set ... : ...`
+
+ All other syntax (e.g., `on ... do ...`, comments, whitespace) is preserved *exactly*.
+
+---
+
+###  Transformation applied to **Instance 1**:
+
+We go line by line, changing only:
+- `def LightThreshold as ...` -> `val LightThreshold : ...`
+- `def IndoorLightThreshold as ...` -> `val IndoorLightThreshold : ...`
+- `def OL_DIM as ...` -> `val OL_DIM : ...`
+- `def OL_SENSOR as ...` -> `val OL_SENSOR : ...`
+- `def hell on light >= ...` -> `def hell : light >= ...`
+- `def spaet on time >= ...` -> `def spaet : time >= ...`
+- `def srRadOn do sr.radiator: true, ...` -> `set srRadOn : sr.radiator: true, sr.roofWindows: false`
+
+All other rules, comments, indentation, empty lines, and semicolons (after statements inside `program { ... }`) are **preserved exactly**.
+
+>  Note: Comments like `// Switch off outdoor lights on sunrise` remain verbatim.
+
+---
+
+###  Final **Instance 2** (Grammar 2-compliant):
+
+```text
+house {
+	@clock time
+	@temp temp
+	@rain rain
+	@light light
+	@rain hell
+	
+	@lamp lamps
+	@boiler boiler
+}
+room lr { // living room
+	@temp temp
+	@light light
+	@switch lightSwitch
+	
+	@roller rollers
+	@lamp lamps
+	@radiator radiator
+}
+room sr { // sleeping room
+	@temp temp
+	@light light
+	@number numberpad
+	
+	@roller rollers
+	@roof roofWindows
+	@radiator radiator
+}
+room ki { // kitchen
+	@temp temp
+	@light light
+	@switch lightSwitch
+	
+	@roller rollers
+	@roof roofWindows
+	@radiator radiator
+	@coffee coffee
+	@lamp lamps
+}
+program {
+	val LightThreshold : 0.4;
+	val IndoorLightThreshold : LightThreshold;
+	val OL_DIM : 23.0;
+	val OL_SENSOR : light;
+	
+	def hell : light >= LightThreshold and spaet;
+	def spaet : time >= 23.0;
+	set srRadOn : sr.radiator: true, sr.roofWindows: false;
+
+	on !hell do lamps: 0; // Switch off outdoor lights on sunrise
+	on hell do lamps: 1; // Switch on outdoor lights on sunset
+	on OL_SENSOR <= IndoorLightThreshold and time >= OL_DIM do lamps: 0.2; // Dimm outdoor lights after 23 o'clock to save energy
+	on time >= 4.00 do lamps: 1; // Fully power outdoor lights at 4 o'clock due to laws
+	
+	on time >= 7.30 do boiler: true; // Heat up water at 7:30
+	on time >= 8.00 do ki.coffee: true; // Get fresh coffee in the morning
+	on time >= 8.30 do ki.coffee: false; // But not to much
+	on time >= 10.00 do boiler: false; // We now have enough warm water and are all up
+	
+	on sr.temp >= 18 do sr.radiator: false; // Switch off radiator above 18 degrees, it's warm enough
+	on sr.temp >= 19 and temp <= 19 or not rain? do sr.roofWindows: true; // If it get's to hot in the sleeping room and 
+															  // it's fresher outdoor: Open Windows. 
+	on sr.temp <= 18 and temp <= 18 do sr.roofWindows: false; // Close windows if it's to cold
+	on sr.temp >= 19 and temp >= 20 do sr.roofWindows: false; // Close windows if it's to warm outside
+	on temp >= 18 and light >= 0.5 do sr.rollers: true; // Close rollers if it's warm and sun is shining (into room)
+	on temp <= 18 do sr.rollers: false; // Open rollers if it's not too warm in room
+	on light <= 0.5 do sr.rollers: false; // Or its' not longer bright outdoor
+	on sr.temp <= 17 do srRadOn; // Boot up radiator if it's too cold
+	
+	on lr.temp >= 21 and light >= 0.5 do lr.rollers: true; // Close rollers in living room if sun is heat everything up
+	on ki.temp >= 21 and light >= 0.5 do ki.rollers: true;
+	on lr.temp <= 17 do lr.radiator: true; // Switch on radiator if it's to cold
+	on ki.temp <= 17 do ki.radiator: true, ki.roofWindows: false;
+	on lr.temp >= 20 do lr.radiator: false;
+	on ki.temp >= 20 do ki.radiator: false;
+	on temp <= 20 do lr.rollers: false; // Open rollers if it's not too warm in room
+	on temp <= 20 do ki.rollers: false;
+	on light <= 0.5 do lr.rollers: false; // Or its' not longer bright outdoor
+	on light <= 0.5 do ki.rollers: false; 
+	
+	on lr.lightSwitch? do lr.lamps: 1.0;
+	on not lr.lightSwitch? do lr.lamps: 0.0;
+	on ki.lightSwitch? do ki.lamps: 1.0;
+	on !ki.lightSwitch? do ki.lamps: 0.0;
+}
+```
+
+---
+
+###  Verification Checklist:
+-  All `def ... as ...` -> `val ... : ...`  
+-  All `def ... on ...` -> `def ... : ...`  
+-  `def srRadOn do ...` -> `set srRadOn : ...`  
+-  All comments, spacing, indentation, empty lines, and line breaks preserved  
+-  Semicolons after statements retained (since they existed in original)  
+-  No new syntax added; no optional branches instantiated  
+-  No missing mandatory symbols (`:`, `val`, `set`)  
+-  No removed constructs re-added  
+
+This instance is **fully compatible with Grammar 2** while preserving all semantics and formatting of the original.
+
+Let me know if you'd like a version with semicolons removed where optional, or if you want to validate this instance via a parser or editor.

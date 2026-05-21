@@ -1,0 +1,57 @@
+ **Task completed**. Below is **Instance 2**, transformed from **Instance 1** to be compatible with **Grammar 2**, following all your constraints rigorously:
+
+```
+module A { 
+ export interface X { s: string } 
+} 
+
+module B { 
+ /*var A = 1; */ 
+ import Y = A; 
+}
+```
+
+---
+
+###  **Why this is the correct evolved instance (Instance 2)**
+
+Let's walk through the transformation step-by-step, comparing **Grammar 1 -> Grammar 2**, and how each change affects **Instance 1 -> Instance 2**.
+
+| # | Change in Grammar 2 | Effect on Instance | Applied? |
+|---|----------------------|-------------------|---------|
+| 1 | `Typescript` structure changed: `imports* interfacesAndClasses=InterfacesAndClasses`<br>-> `InterfacesAndClasses` is a *nested container* with `modules+=ModuleDeclaration \| types+=Declaration` | **No structural change in top-level layout**.<br>Instance 1 already has modules at top-level -> matches. |  No change needed |
+| 2 | `ModuleDeclaration` gains `docComment=DocComment?` | Doc comment is *optional* -> not required.<br>Instance 1 has no `/** ... */` -> we **do not add any doc comment** (per constraint #2). |  No change |
+| 3 | `ModuleElement` now uses `moduleContent=( Declaration \| ModuleDeclaration \| ImportDeclaration )` instead of `(... ClassDeclaration \| InterfaceDeclaration ...)`. | But `Declaration` is defined as `docComment? declaration=InterfaceOrClassDeclaration`, which wraps `InterfaceOrClassDeclaration`. <br>Since `InterfaceDeclaration` and `ClassDeclaration` are *still direct rules*, and `InterfaceOrClassDeclaration` is just a *wrapper*, **surface syntax is unchanged** - the `export interface X ...` remains identical. |  No change to syntax |
+| 4 | `InterfaceDeclaration` **no longer directly contains `objectType=ObjectType`** - it's now in `InterfaceOrClassDeclaration` | Crucially: **the interface body `{ s: string }` is unchanged** - it's still part of `ObjectType`, but now hosted by the wrapper rule. From a textual perspective, **no syntax change** occurs. |  No change |
+| 5 | `TypeReference` changed from `[InterfaceDeclaration\|QualifiedName]` to `[InterfaceOrClassDeclaration\|QualifiedName]` | `A` (used in `import Y = A`) refers to a module - but recall: in Grammar 2, `ModuleDeclaration` is *not* a `Type` or `Declaration`. This is a subtle issue - let's clarify: |
+| | |  **Important note**: In *both* grammars, `ImportDeclaration` expects a `QualifiedName` - and **neither grammar** ties `import ... = ...` to *only* types. In TypeScript semantics, `import Y = A` where `A` is a *module* is valid (for importing module exports).<br>Grammar 2 still allows `QualifiedName`, and `import Y = A` uses `name = QualifiedName`, which is syntactically valid (a single `ID` *is* a `QualifiedName`).<br>-> **No textual modification needed**. |  Kept as `import Y = A;` |
+| 6 | New rules (`DocComment`, `AnnotationLine`, terminals) added - all *optional* or in `|` branches | Per constraint #2: we **do not instantiate new optional/alternation elements**.<br>So: no `/** ... */` comments, no `@` annotations. |  Comments preserved as-is (`/*var A = 1; */` unchanged) |
+| 7 | Deleted rule: none of the removed features (e.g., `EnumDeclaration`, `TypeQuery`, `TypeParameters`) appear in Instance 1 |  No elements to remove. |
+
+---
+
+###  Key Confirmation Points:
+-  All **whitespace, indentation, empty lines, comment content**, and punctuation (`{`, `}`, `;`, space after `export`, etc.) preserved *exactly*.
+-  No mandatory elements omitted (e.g., `module` keyword, `interface`, braces).
+-  No new attributes (e.g., `docComment`) added - all optional.
+-  The `import Y = A;` remains *syntactically valid* in Grammar 2 - `QualifiedName` still accepts `A`, and `ImportDeclaration` still has `name=QualifiedName`.  
+  *(Note: Semantically, `A` must resolve to a module/type, but the grammar syntax itself is untouched.)*
+-  No elements from deleted parts of Grammar 1 (e.g., `EnumDeclaration`, `VariableDeclaration`) were present - so none to remove.
+
+---
+
+ **Final Instance 2 (identical to Instance 1, but now verified Grammar 2-compliant)**  
+*(The transformation is trivial because Grammar 2 is highly compatible - it's a refactoring, not a breaking change.)*
+
+```
+module A { 
+ export interface X { s: string } 
+} 
+
+module B { 
+ /*var A = 1; */ 
+ import Y = A; 
+}
+```
+
+Let me know if you'd like this instance validated against a Grammar 2 AST, or if you want to test with a new instance!

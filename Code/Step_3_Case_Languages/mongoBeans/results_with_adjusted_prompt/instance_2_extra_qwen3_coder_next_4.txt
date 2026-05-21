@@ -1,0 +1,165 @@
+Understood. Let's carefully evolve **Instance 1** (which conforms to **Grammar 1**) into **Instance 2** (conforming to **Grammar 2**), following all your constraints.
+
+---
+
+###  Recap of Key Grammar Changes (Grammar 1 -> Grammar 2)
+
+| Aspect | Grammar 1 | Grammar 2 | Action Required |
+|--------|-----------|-----------|----------------|
+| `MongoBean` declaration keyword | `'mongobean' name=ValidID '{' ... '}'` | `name=ValidID '{' ... '}'` (no `'mongobean'` keyword) |  **Remove `'mongobean'` keyword** from all instances - it's no longer part of the syntax. |
+| `MongoProperty` type alternatives | `type=JvmTypeReference` only | `type=JvmTypeReference \| inlineType=MongoBean` |  Since this is optional (OR, not mandatory), and per your instruction (#2), **do not instantiate the new inline `MongoBean` type** unless it was already present - but it wasn't in Instance 1. So we leave this untouched. |
+| All other rules (`Import`, `PackageDeclaration`, `MongoOperation`, etc.) | unchanged | unchanged |  Preserve exactly. |
+| `AbstractFeature` (`MongoOperation` / `MongoProperty`) | unchanged | unchanged |  Preserve. |
+
+---
+
+###  Step-by-Step Transformation of Instance 1
+
+We must:
+-  Remove every occurrence of the literal keyword `'mongobean'`.
+-  Keep everything else: package name, comments (including `/** ... */`), whitespace, indentation, line breaks, property names, types, operations, Xbase bodies, etc.
+
+#### Original Instance 1 (Grammar 1):
+```xtext
+import java.util.*
+
+package org.musicdb {
+	/**
+	 * A musical performer
+	 */
+	mongobean Artist {
+		String name
+		Album* albums
+		
+		Iterable<Track> getOevre() {
+			albums.map[tracks].flatten
+		}
+	}  
+	 
+	/**
+	 * A record, CD, DVD or another collection of tracks
+	 */
+	mongobean Album {
+		String title
+		int year 
+		Track* tracks
+		
+		Duration getDuration() {
+			tracks.map[duration].reduce[Duration a, Duration b| a + b]
+		}
+	}
+	
+	mongobean Track {
+		String title
+		Duration duration
+	}
+	
+	mongobean Duration {
+		int seconds
+	
+		void fromString(String duration) {
+			val split = duration.split(':')
+			seconds = Integer::parseInt(split.get(0)) * 60 + Integer::parseInt(split.get(1))
+		}		
+		
+		String toString() {
+			Integer::toString(seconds / 60) + ':' + Integer::toString(seconds % 60)
+		}
+		
+		Duration operator_plus(Duration other) {
+			new Duration() [
+				seconds = this.seconds + other.seconds
+			]
+		}
+	}
+}
+```
+
+#### Apply change: Replace `"mongobean"` -> (remove it), i.e., delete the 10-character word `'mongobean'` (including trailing space), leaving only the `ValidID` + `{`.
+
+Note:  
+- There are **5** occurrences of `mongobean ` (with space after), all before bean names:  
+  `mongobean Artist`, `mongobean Album`, `mongobean Track`, `mongobean Duration`  
+- After removal: `Artist {`, `Album {`, `Track {`, `Duration {`
+
+ We preserve:
+- Indentation (each bean body indented by 1 tab or 2 spaces - in original, tabs appear used)
+- Blank lines (e.g., between `Album` and `Track`, and after `Track`)
+- Trailing whitespace after `}` in `Album` block (`}  `)
+- All comments, especially multi-line javadoc-style
+- All whitespace around `getOevre()` vs `getDuration()` blocks
+
+---
+
+###  Evolved Instance 2 (conforming to Grammar 2)
+
+```xtext
+import java.util.*
+
+package org.musicdb {
+	/**
+	 * A musical performer
+	 */
+	Artist {
+		String name
+		Album* albums
+		
+		Iterable<Track> getOevre() {
+			albums.map[tracks].flatten
+		}
+	}  
+	 
+	/**
+	 * A record, CD, DVD or another collection of tracks
+	 */
+	Album {
+		String title
+		int year 
+		Track* tracks
+		
+		Duration getDuration() {
+			tracks.map[duration].reduce[Duration a, Duration b| a + b]
+		}
+	}
+	
+	Track {
+		String title
+		Duration duration
+	}
+	
+	Duration {
+		int seconds
+	
+		void fromString(String duration) {
+			val split = duration.split(':')
+			seconds = Integer::parseInt(split.get(0)) * 60 + Integer::parseInt(split.get(1))
+		}		
+		
+		String toString() {
+			Integer::toString(seconds / 60) + ':' + Integer::toString(seconds % 60)
+		}
+		
+		Duration operator_plus(Duration other) {
+			new Duration() [
+				seconds = this.seconds + other.seconds
+			]
+		}
+	}
+}
+```
+
+---
+
+###  Verification Against Constraints
+
+| Constraint | Status |
+|-----------|--------|
+| 1. No omitted mandatory literals (e.g., `'mongobean'` removed *as required* by grammar change) |  - keyword removed per grammar evolution (it no longer exists in Grammar 2) |
+| 2. Did not instantiate new optional/alternative features (`inlineType=MongoBean`) |  - still no inline beans |
+| 3. Preserved all auxiliary information (comments, whitespace, blank lines, indentation) |  - exact match in layout (only keyword removed) |
+| 4. Removed deleted grammar rule (`mongobean` keyword) - no trace left |  - all 4 `mongobean` occurrences gone |
+| 5. Output provided (non-empty) |  - full instance delivered |
+
+This is the **best-possible evolved instance** under Grammar 2, respecting all constraints.
+
+Let me know when you'd like to validate it, generate code from it, or extend it further (e.g., add inline beans in a *Grammar 2-only* style).

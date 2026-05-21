@@ -1,0 +1,89 @@
+Based on the analysis of **Grammar 2** vs **Grammar 1**, here are the **critical changes** that directly impact **Instance 1**:
+
+---
+
+###  Key Grammatical Differences Affecting Instance 1
+
+| Change | Grammar 1 | Grammar 2 | Consequence for Instance 1 |
+|-------|-----------|-----------|----------------------------|
+| **1. Field naming (camelCase)** | hyphenated: `batch-size`, `image-size`, `image-channels`, `output-labels`, `caffe-path`, `train-data-path`, `val-data-path`, `learningRate`, `seed` | camelCase: `batchSize`, `imageSize`, `imageChannels`, `outputLabels`, `caffePath` (**optional now**), `outputPath`, `learningRate`, `seed` | All hyphenated fields -> **camelCase**: `batchSize`, `imageSize`, `imageChannels`, `outputLabels`, `outputPath`, `learningRate`, `seed`. |
+| **2. `caffePath` optional?** | Required: `'caffe-path' ASSIGN ...` | Optional: `('caffePath' ASSIGN ...) ?` | **No change needed** - we can keep `caffePath = "$CAFFE_HOME"` (still valid). |
+| **3. `LayerName` terminal for `final-layer`** | `'final-layer'` (with hyphen) | `'finalLayer'` (no hyphen) | Instance uses `name: final-layer` -> must become `name: finalLayer` |
+| **4. `BranchBody` rule** | Two fields: `'type' REFERENCE type=BranchType` **and** `'operation' REFERENCE operation=OperationType` | **Only one field**: `'eltwiseOperation' REFERENCE operation=OperationType`<br>**No `type` or `BranchType`** | Must **remove**: <br> the entire line `type -> residual`<br> rename `operation -> PROD` -> `eltwiseOperation -> PROD` |
+| **5. Enum `BranchType` still exists in grammar** | Yes (`enum BranchType: RESIDUAL='residual'`) | Still present (unchanged in enum list) | But since it's **no longer referenced in `BranchBody`**, and the rule for `branch` layer still allows it syntactically, we're not *forbidden* to keep `type -> residual` - **but Grammar 2's `BranchBody` no longer accepts it**, so it would cause a parse error. Per rule #4: **delete it**. |
+| **6. `dense [...]` with multiple tuples** | Allowed: `dense [(name: "d1" out:512), (name: "d2" out:256)]` |  Still supported (grammar unchanged) | No change needed. |
+| **7. SEPARATOR usage** | `','` allowed (as `SEPARATOR`) - e.g., in `dense [...]` list | Still supported | No change. |
+
+---
+
+###  Derived Transformation Rules for Instance 1 -> Instance 2
+
+1. `'batch-size'` -> `'batchSize'`  
+2. `'image-size'` -> `'imageSize'`  
+3. `'image-channels'` -> `'imageChannels'`  
+4. `'output-labels'` -> `'outputLabels'`  
+5. `'caffe-path'` -> `'caffePath'` (retain value; optional but kept)  
+6. `'output-path'` -> `'outputPath'` (unchanged in form, only hyphen removed? Wait - in Grammar 1 it was `'output-path'`, in Grammar 2 `'outputPath'`)  
+7. `'final-layer'` -> `'finalLayer'`  
+8. `'operation'` inside `branch` block -> `'eltwiseOperation'`  
+9. Remove `type -> residual` line entirely  
+10. Preserve all other formatting, whitespace, indentation, comments, and structure exactly.
+
+>  No new fields added (no extra optional attributes instantiated, per rule #2)
+
+---
+
+###  Evolved Instance 2 (adhering strictly to Grammar 2)
+
+```text
+network "DemoNet" {
+	epochs = 10
+	batchSize = 50
+	imageSize = 28
+    imageChannels = 1
+    outputLabels = 10
+
+    caffePath = "$CAFFE_HOME"
+    outputPath = "/media/xpitfire/data/temp"
+
+	updater -> sgd
+	learningRate = 0.003
+
+	conv   (name: "c1" in:data out:64)     { kernelSize = 6 }
+    conv   (name: "c2" 		   out:32)     { kernelSize = 3 }
+	conv   (name: "c3"         out:32)     { kernelSize = 1 }
+
+	branch (name: "b1" in:"c3" out:32)     {
+		eltwiseOperation -> PROD
+
+		conv (name: "bc1"      out:32)     { kernelSize = 1 }
+		norm (name: "bn1")				   { useGlobalStats = true }
+		scale(name: "bs1") 				   { useBiasTerm = true }
+	}
+
+	pool   (name: "p1"         out:3)      { type -> MAX, stride = 1 }
+
+	dense [(name: "d1"         out:512), 
+	       (name: "d2"         out:256)]
+
+	dense  (name: finalLayer  out:labels)
+}
+```
+
+ **Validation against Grammar 2**:
+
+| Element | Grammar 2 compliance |
+|---------|----------------------|
+| `batchSize`, `imageSize`, `imageChannels`, `outputLabels`, `caffePath`, `outputPath`, `learningRate` |  camelCase keywords |
+| `outputPath` present, no `valDataPath` (optional) |  kept minimal |
+| `caffePath` retained - valid (optional but allowed) |  |
+| `finalLayer` instead of `final-layer` |  matches `'finalLayer'` |
+| `branch` block: only `eltwiseOperation -> PROD`, no `type -> residual` |  |
+| `kernelSize`, `useGlobalStats`, `useBiasTerm` |  camelCase (Grammar 2: `'kernelSize'`, `'useGlobalStats'`, `'useBiasTerm'`) |
+| Whitespace, indentation, empty lines, comment-free formatting preserved |  |
+| No extra or inferred fields |  |
+
+Let me know if you'd like:
+- A diff version,
+- A version with strict strict whitespace (e.g., no tabs),
+- Or a check for whether this instance is *fully* parseable by Grammar 2.

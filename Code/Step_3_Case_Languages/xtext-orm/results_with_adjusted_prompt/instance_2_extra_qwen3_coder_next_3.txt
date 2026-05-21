@@ -1,0 +1,449 @@
+Understood. Let's proceed step-by-step.
+
+We'll first identify **all differences between Grammar 1 and Grammar 2** (especially deletions, syntax changes, and structural shifts), then systematically transform **Instance 1** (Grammar 1) -> **Instance 2** (Grammar 2), strictly adhering to your constraints.
+
+---
+
+###  **Step 1: Critical Grammar Differences (Grammar 1 -> Grammar 2)**
+
+####  **1. Top-level structure changed**
+- **Grammar 1**: `PersistenceModel: (entities+=Entity)+`
+- **Grammar 2**:  
+  ```xtext
+  PersistenceModel:
+    'Configuration' '[' configs+=Configuration+ ']'
+    (entities+=Entity)+
+  ;
+  ```
+  -> Instance **must** now start with a `Configuration [...]` block.
+
+ **Constraint 2**: If new rule is optional or in `|`, don't instantiate.  
+But `'Configuration' [...]` is **mandatory** (no `?`/`|`). So **we must add it**.
+
+Also: `configs+=Configuration+`  at least one config. Since no config is optional, and we're not allowed to invent new behavior (Constraint 1), we must pick *one* config option.
+
+We'll choose the simplest: **`Java` config with default values** - but only include fields that exist *unchanged* in Grammar 2 (no extras).
+
+-> Use:  
+```xtext
+Configuration [
+  Java [
+    genpath "src-gen"
+    package de.tobias_blaufuss.gen
+    ORM Hibernate
+  ]
+]
+```
+
+ Valid & minimal - matches `JavaConfiuration` rule exactly.
+
+---
+
+####  **2. `FieldDeclaration` wrapper introduced**
+- **Grammar 1** had inline options in fields:  
+  `property name: String [unique, not_null]`  
+- **Grammar 2** has:  
+  `FieldDeclaration: field=Field ('[' options+=TypeOption (',' options+=TypeOption)? ']')?`  
+  -> Options attached **to the field declaration**, *not* to the field itself.
+
+But critically:  
+ **Inline options inside `PropertyField`, `EntityField`, `BackrefField` are now *invalid syntax*** - they are *deleted* from the inner rules.
+
+So:  
+- `property name: String [unique]` (Grammar 1)  
+  -> becomes  
+- `field=PropertyField [unique]` in Grammar 2  
+  -> which expands to:  
+  ```xtext
+  property name: String [unique]
+  ```
+  BUT WAIT - grammar says:  
+  ```xtext
+  PropertyField: 'property' name=ID ':' type=Type
+  ```  
+   **no `[options]` allowed *on the PropertyField itself*** - only *outside*, via `FieldDeclaration`.
+
+So full expansion in text:
+```xtext
+property name: String
+[unique, not_null]
+```
+
+But wait - is this legal? Yes:  
+`FieldDeclaration: field=Field ('[' options...]')?`  
+-> So *two lines* (field + options) or same-line with newline?  
+In Xtext, whitespace is ignored, but **grammar does not allow `[...]` inline with field** - it must be *separate* (after `Field`).
+
+Thus, valid representation is:
+```xtext
+property name: String
+[unique, not_null]
+```
+
+-> i.e., **options moved to a *separate line* immediately after the field line**, indented to match.
+
+ Constraint 3: Do **not** change whitespace/fmts - so preserve original indentation of field lines, and add options on *next line*, indented same level.
+
+---
+
+####  **3. `EntityField` syntax changed drastically**
+- **Grammar 1**:  
+  `object [cardinality=Cardinality] name=ID ':' entityReference=[Entity] ('[' options...]')?`  
+  -> Options inline (e.g., `object [n..1] sportshall: SportsHall [not_null]`)
+
+- **Grammar 2**:  
+  `EntityField: 'object' '[' cardinality=Cardinality '|' (bidirectional ?= '<->'| unidirectional ?= '->') ']' name=ID ':' entityReference=[Entity]`  
+  -> **No options allowed at all** (no `[...]` after `entityReference`)  
+  -> **Mandatory separator `|`** between cardinality and direction  
+  -> **Direction must be specified**: either `->` or `<->`  
+  -> Cardinality *still* appears as before (`1..n`, etc.)
+
+ **Critical**: Grammar 2 adds `bidirectional ?= '<->' | unidirectional ?= '->'` - but note:
+- These are *optional* in the `|` group? No - syntax is:  
+  `'object' '[' cardinality=Cardinality '|' (bidirectional ?= '<->'| unidirectional ?= '->') ']'`  
+  -> The parentheses mean **one of the two must appear** (since no `?` or `|...)?`, and both alternatives are inside the same group with `|`, but no outer `?`). Actually:  
+  In Xtext, `(a ?= 'A' | b ?= 'B')` means *exactly one* of them is matched - but here there's no `|` outside -> it's an *unordered disjunction with mutual exclusion*.
+
+ **Conclusion**: Every `object` field must now specify **direction** - either `->` (unidirectional) or `<->` (bidirectional).  
+ We have no info about intent - per Constraint 2, **do not invent direction** unless Grammar 2 forces it (and it does).  
+So we must pick one.
+
+But: How to decide?  
+Grammar 1 did *not* distinguish - all `object [...]` were presumably bidirectional.  
+-> So safest default: use `<->` (bidirectional), as originally intended.
+
+Also: **no `[options]`** allowed on `EntityField` in Grammar 2 - only at `FieldDeclaration` level.
+
+-> So `object [n..1] sportshall: SportsHall [not_null]`  
+-> becomes  
+```xtext
+object [n..1 | <->] sportshall: SportsHall
+[not_null]
+```
+
+ Yes - options now on separate line.
+
+Same for `backref` - see next.
+
+---
+
+####  **4. `BackrefField` syntax changed**
+- **Grammar 1**:  
+  `backref '[' backref=[EntityField|FQN] ']' name=ID ('[' options...]')?`  
+  -> `[options]` inline (e.g., `backref [Club.teams] club [not_null]`)
+
+- **Grammar 2**:  
+  `BackrefField: 'backref' '[' backref=[EntityField|FQN] ']' name=ID`  
+  -> **no `[options]` on the field itself** - only at `FieldDeclaration` level.
+
+So same transformation:  
+`backref [Club.teams] club [not_null]`  
+->  
+```xtext
+backref [Club.teams] club
+[not_null]
+```
+
+Also: Grammar 2 still allows `FQN` as target (`[EntityField|FQN]`), so we keep `Club.teams`, etc.
+
+---
+
+####  **5. Removed inline `options` in field definitions**
+All occurrences of `[...]` *inside* `PropertyField`, `EntityField`, or `BackrefField` rules must be:
+- Moved to a **new line immediately after** the field line, with same indentation, wrapped in `[...]`
+- No field line ends with `[...]` anymore
+
+---
+
+####  **6. No more `Type` options on `PropertyField` itself**
+Grammar 2's `PropertyField` is now:  
+```xtext
+'property' name=ID ':' type=Type
+```  
+-> So `String` with `count` still valid (`String(200)`), but *no* `[...]` options inside.
+
+So `property name: String [unique]`  
+-> becomes  
+```xtext
+property name: String
+[unique]
+```
+
+---
+
+####  **7. Configuration block is added**
+We must add:
+```xtext
+Configuration [
+  Java [
+    genpath "src-gen"
+    package de.tobias_blaufuss.gen
+    ORM Hibernate
+  ]
+]
+```
+-> Why this config? Because:
+- Only `JavaConfiuration` and `PythonConfiguration` exist.
+- We must pick *one* - `Java` is neutral and matches original domain (German, no Python hints).
+- All fields are required and mandatory in `JavaConfiuration` - no optionality.
+
+ Note: `genpath` rule uses `Path = ID ('/' ID)*` - `"src-gen"` is valid (`ID` can include `-`? In Xtext, `ID` = `('a'..'z'|'A'..'Z'|'_') ('a'..'z'|'A'..'Z'|'_'|'0'..'9')*` -> **no `-` allowed!**  
+-> `"src-gen"` is *not* valid `ID`.
+
+But `Path = ID ('/' ID)*`, so we must use something like `src_gen` (underscore).
+
+But Constraint 1: *Do not omit or add any characters.*  
+However - `"src-gen"` is in the example as a placeholder in `genpath` - let's check: the `Path` rule says `ID ('/' ID)*`, and `ID` in Xtext does **not** allow `-`. So `"src-gen"` is technically invalid.
+
+But wait - the user didn't ask for *semantic validity*, only *syntactic alignment with grammar*. And the grammar says:  
+`genpath path=Path` and `Path = ID ('/' ID)*`
+
+So we must use valid `ID`s only - i.e., no `-`.
+
+-> Let's use `src_gen` (to stay valid), **not** `src-gen`.
+
+But is changing the string allowed? Constraint 1: *Do not omit or add any characters*.  
+-> The original instance had no config block. We are *adding* a block - and in doing so, we must follow the grammar.
+
+Since `"src-gen"` is **not valid per grammar**, and the grammar forbids `-`, the *only* valid path is e.g. `src/gen`? No - `Path` is flat: `ID ('/' ID)*` - so `src/gen` is *two* IDs separated by `/`, which is OK.
+
+Wait - `Path = ID ('/' ID)*`  
+-> so `src/gen` -> `src` + `/` + `gen` = valid  
+-> `src_gen` (one ID) is also valid.
+
+Which to pick?  
+Since original `genpath` was `"src-gen"`, and that's invalid, we must *correct* it to be syntactically valid.
+
+But constraint says: "Do not omit or add any auxiliary information", and "character enclosed by single quotes" must be preserved - but `genpath` value is not in quotes; it's `path=Path` (a `Path` rule, not a string literal).
+
+So we are free to choose a valid `Path`.  
+Let's pick `src_gen` - safe, simple, valid.
+
+ So:  
+`genpath src_gen`  
+`package de.tobias_blaufuss.gen` (valid FQN)  
+`ORM Hibernate`
+
+Same for Python - but we won't use it.
+
+---
+
+####  **8. Typo in Grammar 2: `JavaConfiuration` (not `Configuration`)**  
+-> Irrelevant for instance - rule name is internal; user wrote `Configuration` in `PersistenceModel` (uppercase C), and `JavaConfiuration` is internal rule. Instance uses `Configuration [...]` - correct.
+
+ Also `PythonConfiguration` is correct (note "g").
+
+---
+
+###  **Step 2: Transform Instance 1 -> Instance 2**
+
+Let's go entity-by-entity, applying all rules.
+
+####  Top-level: Add Configuration block (must be first)
+
+We'll add:
+```xtext
+Configuration [
+  Java [
+    genpath src_gen
+    package de.tobias_blaufuss.gen
+    ORM Hibernate
+  ]
+]
+```
+
+No blank line before it - but instance 1 started at top level with `entity Club`, so we'll keep same top-level indent (none), and separate config from first entity with blank line (as instance 1 uses blank lines between entities, but config is new).
+
+-> Prepend config, then one blank line, then `entity Club { ...`
+
+---
+
+####  Entity header unchanged: `entity Club {` -> stays.
+
+####  Field-by-field transformation:
+
+Original:
+```xtext
+property name: String [unique, not_null]
+```
+
+-> Transform to:
+```xtext
+property name: String
+[unique, not_null]
+```
+
+Same for all `property`.
+
+Original:
+```xtext
+object [n..1] sportshall: SportsHall [not_null]
+```
+->  
+```xtext
+object [n..1 | <->] sportshall: SportsHall
+[not_null]
+```
+
+Note: We added `| <->` (bidirectional). Why not `->`? Because in absence of info, bidirectional matches original intent (backrefs used elsewhere). We pick one - bidirectional is safest.
+
+Similarly:
+```xtext
+object [1..n] teams: Team
+```
+->  
+```xtext
+object [1..n | <->] teams: Team
+```
+
+All `object`s -> add `| <->`
+
+Backrefs:  
+```xtext
+backref [Club.teams] club [not_null]
+```
+->  
+```xtext
+backref [Club.teams] club
+[not_null]
+```
+
+Same for all backrefs.
+
+ All `backref`s now use same pattern.
+
+Also: Note that `backref` fields don't have direction syntax - only `object` fields do.
+
+---
+
+###  Final instance (Instance 2)
+
+Below is the fully transformed instance, with:
+- Configuration block added (valid `Path`, `FQN`)
+- All fields wrapped with `FieldDeclaration` syntax: field line -> blank -> options line
+- All `object` fields updated to include `| <->`
+- Indentation preserved (2 spaces per level; original instance used 2-space indent)
+- Empty lines preserved as in original (between entities)
+
+Note: Original instance used **no trailing comma**, and we preserve that.
+
+---
+
+```xtext
+Configuration [
+  Java [
+    genpath src_gen
+    package de.tobias_blaufuss.gen
+    ORM Hibernate
+  ]
+]
+
+entity Club {
+	property name: String
+	[unique, not_null]
+	
+	object [n..1 | <->] sportshall: SportsHall
+	[not_null]
+	
+	object [1..n | <->] teams: Team
+	object [1..n | <->] roles: ClubRole
+	object [1..n | <->] sessions: TrainingSession
+}
+
+entity Team {
+	property numbering: Integer
+	[not_null]
+	property name: String
+	[unique]
+	
+	object [n..1 | <->] leader: Player
+	
+	object [n..m | <->] sessions: TrainingSession
+	
+	backref [Club.teams] club
+	[not_null]
+	backref [Player.team] members
+}
+
+entity Player {
+	property public_id: String(100)
+	[not_null, unique]
+	property first_name: String
+	[not_null]
+	property last_name: String
+	[not_null]
+	property position: Integer
+	
+	object [1..n | <->] information: Information
+	object [1..n | <->] roles: ClubRole
+	
+	object [n..1 | <->] team: Team
+	object [n..1 | <->] image: Image
+	[not_null]
+}
+
+entity Image {
+	property path: String(200)
+	[not_null]
+	property title: String
+	[not_null]
+}
+
+entity Information {
+	property attribute: String
+	[not_null]
+	property val: String
+	[not_null]
+	
+	backref [Player.information] player
+	[not_null]
+}
+
+entity SportsHall {
+	property street: String
+	[not_null]
+	property street_number: Integer
+	[not_null]
+	property zip_code: String
+	[not_null]
+	property place: String
+	[not_null]
+	property country: String
+	[not_null]
+	property state: String
+	[not_null]
+	
+	object [n..m | <->] images: Image
+}
+
+entity ClubRole {
+	property name: String
+	[not_null]
+	
+	backref [Club.roles] club
+	[not_null]
+	backref [Player.roles] player
+}
+
+entity TrainingSession {
+	property day: Integer
+	[not_null]
+	property hour: Integer
+	[not_null]
+	property minute: Integer
+	[not_null]
+	
+	backref [Club.sessions] club
+	[not_null]
+}
+``` 
+
+ This instance:
+- Obeys **Grammar 2 exactly** (syntactically),
+- Preserves all original semantic elements and optionality,
+- Adds only the mandatory `Configuration` block (with valid grammar),
+- Moves *all* options to separate lines (per `FieldDeclaration`),
+- Adds `| <->` to all `object` fields (only valid direction syntax available),
+- Does not invent new fields or remove any.
+
+Let me know if you'd like an alternative (e.g., using `->` for some fields, or `Python` config), but this is the minimal, safe, and consistent evolution.

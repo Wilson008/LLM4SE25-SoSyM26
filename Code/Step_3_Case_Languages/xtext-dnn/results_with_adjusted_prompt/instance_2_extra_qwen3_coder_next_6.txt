@@ -1,0 +1,157 @@
+Understood. I will now rigorously transform **Instance 1** (Grammar 1-compliant) into **Instance 2**, which must be fully compatible with **Grammar 2**, while obeying all your constraints.
+
+Let's begin with a **complete comparison table** of all *grammatical changes* from Grammar 1 -> Grammar 2, then systematically apply them to the instance.
+
+---
+
+###  **Grammatical Changes from Grammar 1 -> Grammar 2**
+
+| Category | Grammar 1 Element | Grammar 2 Element | Mandatory? | Action on Instance |
+|---------|-------------------|-------------------|------------|--------------------|
+| **Network header fields** | `batch-size` | `batchSize` | Yes | Replace literal `'batch-size'` -> `batchSize` |
+| | `image-size` | `imageSize` | Yes | -> `imageSize` |
+| | `image-channels` | `imageChannels` | Yes | -> `imageChannels` |
+| | `output-labels` | `outputLabels` | Yes | -> `outputLabels` |
+| | `train-data-path` | `trainDataPath` (optional now) | Yes if present | -> `trainDataPath` |
+| | `val-data-path` | `valDataPath` (optional) | Yes if present | -> `valDataPath` |
+| | `caffe-path` | `caffePath` (now **optional**) | Yes if present | -> `caffePath` |
+| | `output-path` | `outputPath` | Yes | -> `outputPath` |
+| | `epochs`, `learningRate`, `updater`, `seed` | unchanged | - | No change needed |
+| **Layer-specific fields** | `kernel-size` | `kernelSize` | Yes (in `conv`) | -> `kernelSize` |
+| | `stride` | unchanged (still `'stride'`) | - | Keep `stride` |
+| | `use-bias-term` | `useBiasTerm` | Yes (in `scale`) | -> `useBiasTerm` |
+| | `use-global-stats` | `useGlobalStats` | Yes (in `norm`) | -> `useGlobalStats` |
+| | `operation` (inside `branch`) | **removed** -> `eltwiseOperation` | Yes | Replace `operation -> PROD` with `eltwiseOperation -> PROD` |
+| | `type` (inside `branch`) | **deleted entirely** |  | **Remove `type -> residual`** (critical!) |
+| **Layer declarations** | `name: final-layer` | `name: finalLayer` | Yes | Replace string `'final-layer'` -> `'finalLayer'` |
+| **Other fields** | `in:data`, `out:labels`, etc. | unchanged | - | Keep as-is |
+| **Enum literals** | `residual` (BranchType) | still exists | - | No change (but since `type -> residual` is removed, no impact) |
+| | `MAX`, `AVG`, `ReLU`, etc. | unchanged | - | No change |
+
+ **Deleted Grammar Rules in Grammar 2**  
+- `BranchType` enum is still present in Grammar 2   
+- BUT: `BranchBody` changed:  
+  - Grammar 1: `'type' REFERENCE type=BranchType & 'operation' REFERENCE operation=OperationType`  
+  - Grammar 2: `'eltwiseOperation' REFERENCE operation=OperationType`  
+  -> **So `type -> ...` is deleted. We must remove it entirely.**
+
+Also:  
+- `SEPARATOR` = `,` used in multi-layer `dense [...]` - unchanged   
+- `REFERENCE` = `->` unchanged   
+- `ASSIGN` = `=` unchanged   
+- No terminals added/removed except *missing `INT`* - but since instance uses only integers like `6`, `1`, etc., and `INT` is undefined in both, **no effect on instance syntax**.
+
+---
+
+###  **Instance 1 Recap (for reference)**
+
+```text
+network "DemoNet" {
+	epochs = 10
+	batch-size = 50
+	image-size = 28
+    image-channels = 1
+    output-labels = 10
+
+    caffe-path = "$CAFFE_HOME"
+    output-path = "/media/xpitfire/data/temp"
+
+	updater -> sgd
+	learningRate = 0.003
+
+	conv   (name: "c1" in:data out:64)     { kernel-size = 6 }
+    conv   (name: "c2" 		   out:32)     { kernel-size = 3 }
+	conv   (name: "c3"         out:32)     { kernel-size = 1 }
+
+	branch (name: "b1" in:"c3" out:32)     {
+		operation -> PROD
+		type -> residual
+
+		conv (name: "bc1"      out:32)     { kernel-size = 1 }
+		norm (name: "bn1")				   { use-global-stats = true }
+		scale(name: "bs1") 				   { use-bias-term = true }
+	}
+
+	pool   (name: "p1"         out:3)      { type -> MAX, stride = 1 }
+
+	dense [(name: "d1"         out:512), 
+	       (name: "d2"         out:256)]
+
+	dense  (name: final-layer  out:labels)
+}
+```
+
+---
+
+###  **Instance 2 (Grammar 2-compliant)**
+
+I will now apply *every* change, **exactly preserving whitespace, indentation, tabs, line breaks, and comments (none here)** - as instructed.
+
+ Changes made:
+- `batch-size` -> `batchSize`  
+- `image-size` -> `imageSize`  
+- `image-channels` -> `imageChannels`  
+- `output-labels` -> `outputLabels`  
+- `caffe-path` -> `caffePath`  
+- `output-path` -> `outputPath`  
+- `kernel-size` -> `kernelSize` (3 occurrences)  
+- `operation -> PROD` -> `eltwiseOperation -> PROD`  
+- **Removed `type -> residual`** (deleted per Grammar 2 rule)  
+- `use-global-stats` -> `useGlobalStats`  
+- `use-bias-term` -> `useBiasTerm`  
+- `name: final-layer` -> `name: finalLayer`
+
+ Note:  
+- `pool { type -> MAX }` is *unchanged* because `type` here refers to `poolingType` in `PoolLayerBody`, not to a `BranchBody`. Grammar 2 kept `PoolLayerBody` unchanged (still `'type' REFERENCE poolingType=PoolingType`).   
+- `layerParams` in `LayerBody` (`activation`, `weightsInit`, etc.) unchanged - none appear in instance.
+
+Here is the evolved instance:
+
+```text
+network "DemoNet" {
+	epochs = 10
+	batchSize = 50
+	imageSize = 28
+    imageChannels = 1
+    outputLabels = 10
+
+    caffePath = "$CAFFE_HOME"
+    outputPath = "/media/xpitfire/data/temp"
+
+	updater -> sgd
+	learningRate = 0.003
+
+	conv   (name: "c1" in:data out:64)     { kernelSize = 6 }
+    conv   (name: "c2" 		   out:32)     { kernelSize = 3 }
+	conv   (name: "c3"         out:32)     { kernelSize = 1 }
+
+	branch (name: "b1" in:"c3" out:32)     {
+		eltwiseOperation -> PROD
+
+		conv (name: "bc1"      out:32)     { kernelSize = 1 }
+		norm (name: "bn1")				   { useGlobalStats = true }
+		scale(name: "bs1") 				   { useBiasTerm = true }
+	}
+
+	pool   (name: "p1"         out:3)      { type -> MAX, stride = 1 }
+
+	dense [(name: "d1"         out:512), 
+	       (name: "d2"         out:256)]
+
+	dense  (name: finalLayer  out:labels)
+}
+```
+
+ **Validation checklist**:
+- All mandatory quoted literals preserved (`"DemoNet"`, `"c1"`, `"$CAFFE_HOME"`, etc.)  
+- All `ASSIGN` (`=`) and `REFERENCE` (`->`) tokens unchanged  
+- `SEPARATOR` (`,`) preserved in `dense [...]` block  
+- No optional fields added (e.g., no `seed`, no `trainDataPath`, etc.)  
+- Deleted rule `type -> residual` fully removed - *not replaced*  
+- `final-layer` -> `finalLayer`  
+- No added/omitted whitespace, tabs, or newlines  
+- `pool { type -> MAX }` retained (as `type` is still valid in `PoolLayerBody`)
+
+This is the **canonical, minimal, syntax-correct evolution** of Instance 1 into Instance 2 per Grammar 2.
+
+Let me know if you'd like a validation trace or AST comparison next!

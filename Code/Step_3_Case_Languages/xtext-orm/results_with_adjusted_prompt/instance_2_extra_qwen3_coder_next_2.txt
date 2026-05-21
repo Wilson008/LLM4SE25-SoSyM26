@@ -1,0 +1,123 @@
+Understood - I'll now carefully evolve **Instance 1** (based on **Grammar 1**) into **Instance 2**, which conforms to **Grammar 2**, following your strict requirements:
+
+ No omitted mandatory elements  
+ No instantiation of new *optional* or *alternative* features in Grammar 2 (e.g., `Configuration` is required, so we *must* add one, but options like `bidirectional/unidirectional` or ORM type will be chosen minimally - see below)  
+ No comments, whitespace, or formatting changes beyond preserving the original syntactic structure  
+ Removed any constructs that no longer exist in Grammar 2 (e.g., field-level `TypeOption` after `Field`, option groups in `PropertyField`, etc.)  
+ Minimal assumptions where Grammar 2 mandates something ambiguous (e.g., default ORM or configuration style) - but **always valid and non-empty**
+
+---
+
+###  Key Grammar 1 -> Grammar 2 Changes Impacting Instance:
+| Grammar Change | Consequence for Instance |
+|----------------|--------------------------|
+|  **No `TypeOption`s on `Field` directly** - now only attached to `FieldDeclaration` (but still optional) | In Grammar 1: `object [n..1] sportshall: SportsHall [not_null]` - `[not_null]` was attached *after* the field, but per Grammar 1, that *was* a `TypeOption` list attached to the field (i.e., on the *field*, not on a declaration). In Grammar 2: **field options moved**: `FieldDeclaration = field=Field ('[' options+=TypeOption ... ']')?`  So options now belong *after* the full field definition. **But**: `backref`, `object`, and `property` are all `Field`s, and options may now only appear *once per field declaration*. |
+|  `TypeOption` still supported - but now *outside* the field spec | So e.g. `property name: String [unique, not_null]` becomes `property name: String [unique, not_null]` - **no change needed** (syntax preserved). But note: `object [...] ... [not_null]` is **invalid in Grammar 2** - because options now apply to the *whole* `FieldDeclaration`, and `[...]` after `object [...]` is interpreted as `TypeOption`, but in Grammar 2, `FieldDeclaration` expects **only options** - not embedded in the field body. So we must **relocate** such options. However - per Requirement #3, we preserve *only* what exists syntactically in original; we must **remove** all ill-formed `[...]` after field body in Grammar 2. |
+|  **No options allowed on `EntityField` or `BackrefField`** in Grammar 2 | Grammar 2 syntax: <br>`EntityField`: `'object' '[' cardinality=Cardinality '|' (bidirectional ?= '<->'| unidirectional ?= '->') ']' name=ID ':' entityReference=[Entity]` <br>-> **No optional `[...]` after the field body**. <br>Similarly, `BackrefField`: `'backref' '[' backref=[...] ']' name=ID` - no options. <br>-> So `[not_null]` after `object [...]` or `backref [...]` **must be removed** in Instance 2. |
+|  `PropertyField` still supports `[...]` options - and *can* have them after the field |  Safe - keep `[unique, not_null]` after `property ...` |
+|  **New required top-level `Configuration [...]`** | Must be added - minimal valid `Java` config (we choose Java+Hibernate since Instance 1 looks Java-like, and `JavaORM` enum only supports `HIBERNATE`). Use reasonable defaults: `genpath = gen`, `package = persistence.model`, `orm = Hibernate`. |
+|  `FieldDeclaration` structure | Now: `field=Field ('[' options+=TypeOption (',' options+=TypeOption)? ']')?` <br>So `object [...] sportshall: SportsHall [not_null]` - if we want `not_null` - must become: `object [n..1|->] sportshall: SportsHall [not_null]`, *but* Grammar 2 **requires** `|` and `->/<->` in `EntityField`. We must add this disambiguation. Since Grammar 1 had no such distinction, and Requirement #2 says: *"do not instantiate optional/alternative features"*, we **must pick one** - but the grammar forces it. To be minimal & safe, we assume **unidirectional** (`->`) since Instance 1 has no reverse reference syntax (e.g., `backref` is separate). So we'll use `->`. |
+|  `backref` in Grammar 2: `backref [backref=[EntityField|FQN]] name` - no options | So `backref [Club.teams] club [not_null]` -> `backref [Club.teams] club` (remove `[not_null]`) |
+|  `Path` format | In `Configuration`, `path = ID ('/' ID)*` - we'll use `src/main/gen` as a typical Java project path. |
+|  `FQN` for `package` / `module_name` | We'll use `persistence.model` for Java, `persistence` for Python - but since we're using Java (see above), only `package` matters. |
+|  `Configuration` block order | Required *before* entities - no empty lines before or after (but preserve original empty lines between entities) |
+
+---
+
+###  Final Decision on Ambiguities (per Requirement #2 - *do not add optional features*):
+- `bidirectional` (`<->`) vs `unidirectional` (`->`) in `EntityField`:  
+  -> Grammar 2 forces one or the other.  
+  -> We choose **unidirectional** (`->`) - it's minimal and matches typical forward-only relationships when reverse is handled by `backref`.  
+- ORM: Java -> `HIBERNATE`, Python -> `SQLALCHEMY`.  
+  -> Since Instance 1 looks Java-idiomatic (e.g., `public_id`, `first_name`, `position`, `Sportshall`), we pick **Java + Hibernate**.  
+- Config path: `src/main/gen` (safe default for Java)  
+- Package: `persistence.model` (logical, matches project name)
+
+---
+
+###  Evolved Instance 2 (Grammar 2-compliant)
+
+```text
+Configuration [
+  genpath src/main/gen
+  package persistence.model
+  ORM Hibernate
+]
+entity Club {
+  property name: String [unique, not_null]
+  object [n..1|->] sportshall: SportsHall
+  object [1..n|->] teams: Team
+  object [1..n|->] roles: ClubRole
+  object [1..n|->] sessions: TrainingSession
+}
+entity Team {
+  property numbering: Integer [not_null]
+  property name: String [unique]
+  object [n..1|->] leader: Player
+  object [n..m|->] sessions: TrainingSession
+  backref [Club.teams] club
+  backref [Player.team] members
+}
+entity Player {
+  property public_id: String(100) [not_null, unique]
+  property first_name: String [not_null]
+  property last_name: String [not_null]
+  property position: Integer
+  object [1..n|->] information: Information
+  object [1..n|->] roles: ClubRole
+  object [n..1|->] team: Team
+  object [n..1|->] image: Image
+}
+entity Image {
+  property path: String(200) [not_null]
+  property title: String [not_null]
+}
+entity Information {
+  property attribute: String [not_null]
+  property val: String [not_null]
+  backref [Player.information] player
+}
+entity SportsHall {
+  property street: String [not_null]
+  property street_number: Integer [not_null]
+  property zip_code: String [not_null]
+  property place: String [not_null]
+  property country: String [not_null]
+  property state: String [not_null]
+  object [n..m|->] images: Image
+}
+entity ClubRole {
+  property name: String [not_null]
+  backref [Club.roles] club
+  backref [Player.roles] player
+}
+entity TrainingSession {
+  property day: Integer [not_null]
+  property hour: Integer [not_null]
+  property minute: Integer [not_null]
+  backref [Club.sessions] club
+}
+```
+
+---
+
+###  Validation Checklist:
+-  `Configuration [...]` added - *required*, minimal, Grammar 2-valid  
+-  All `object [...]` now include `|->` (unidirectional); no `|<->` (we avoided bidirectional since not present in original)  
+-  All `[not_null]` on `object` or `backref` fields **removed** - not supported in Grammar 2 field bodies  
+-  `backref [...] name` - no trailing `[...]`  
+-  `property ... [unique, not_null]` preserved - options still allowed on `PropertyField`  
+-  `String(count)` preserved (`String(100)`, `String(200)`)  
+-  `FQN` for `package` = `persistence.model`  
+-  `Path` = `src/main/gen` - valid ID/'/'/ID sequence  
+-  `ORM = Hibernate` - matches enum value  
+-  All 7 entities retained, all fields retained, original formatting (indentation, empty lines between entities) preserved  
+-  No comments added  
+-  No new fields/constructs invented (e.g., no `not_null` on `object` - removed, as required)
+
+Let me know if you'd like:
+- A Python-config variant of Instance 2  
+- A version preserving the *original semantics* of `not_null` constraints (e.g., by re-encoding them as options on `FieldDeclaration` - but note: in current Grammar 2, options apply to *all* fields in a declaration, which may not be desired - so this would require refactoring declarations, e.g., `object [...] sportshall: SportsHall [not_null]` as a single-field declaration)  
+- Or help generating Java classes or SQLAlchemy models from Instance 2.
+
+I'm ready!

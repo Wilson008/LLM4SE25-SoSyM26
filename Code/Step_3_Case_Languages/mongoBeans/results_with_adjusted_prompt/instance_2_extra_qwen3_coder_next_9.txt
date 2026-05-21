@@ -1,0 +1,151 @@
+Understood. Let's proceed step by step.
+
+We are transforming **Instance 1** (which follows **Grammar 1**) -> **Instance 2** (which must follow **Grammar 2**).
+
+---
+
+###  Summary of Grammar 1 -> Grammar 2 Changes (Relevant to Instance Transformation)
+
+| Change | Consequence for Instance |
+|--------|--------------------------|
+| **Removed `mongobean` keyword** in `MongoBean` rule | Every `mongobean X { ... }` must become `X { ... }` |
+| `MongoProperty` now allows `inlineType=MongoBean` (via `|`) | But per instruction #2, **do not instantiate optional/new features** - i.e., we keep only existing `JvmTypeReference` properties; avoid inline `Address { ... } addr` syntax unless already present (it isn't). |
+| All other rules unchanged (`Import`, `PackageDeclaration`, `AbstractFeature`, `MongoOperation`, etc.) | Preserve all existing syntax for imports, types, operations, bodies, comments, formatting. |
+
+>  **Critical**: The only *mandatory syntactic change* is removal of the `mongobean` keyword.
+
+>  **Do not** remove or alter comments, whitespace, indentation, or formatting - e.g., the `/** ... */` doc comments, `package` braces, `}` at end of each bean, spacing around `{`, `}`, `*`, etc.
+
+---
+
+###  Apply Transformation to Instance 1
+
+#### Original Instance 1 (Grammar 1):
+```xtext
+import java.util.*
+
+package org.musicdb {
+	/**
+	 * A musical performer
+	 */
+	mongobean Artist {
+		String name
+		Album* albums
+		
+		Iterable<Track> getOevre() {
+			albums.map[tracks].flatten
+		}
+	}  
+	 
+	/**
+	 * A record, CD, DVD or another collection of tracks
+	 */
+	mongobean Album {
+		String title
+		int year 
+		Track* tracks
+		
+		Duration getDuration() {
+			tracks.map[duration].reduce[Duration a, Duration b| a + b]
+		}
+	}
+	
+	mongobean Track {
+		String title
+		Duration duration
+	}
+	
+	mongobean Duration {
+		int seconds
+	
+		void fromString(String duration) {
+			val split = duration.split(':')
+			seconds = Integer::parseInt(split.get(0)) * 60 + Integer::parseInt(split.get(1))
+		}		
+		
+		String toString() {
+			Integer::toString(seconds / 60) + ':' + Integer::toString(seconds % 60)
+		}
+		
+		Duration operator_plus(Duration other) {
+			new Duration() [
+				seconds = this.seconds + other.seconds
+			]
+		}
+	}
+}
+```
+
+####  Transformation Rule:
+- Replace every occurrence of `mongobean` -> remove it.
+- Keep everything else unchanged: spaces, comments, `*`, `{`, `}`, indentation (tabs/spaces as original), parentheses, etc.
+
+> Note: There are **no** inline bean definitions in Instance 1, so no risk of accidentally adding new constructs.
+
+---
+
+###  Final Instance 2 (Grammar 2-compliant):
+
+```xtext
+import java.util.*
+
+package org.musicdb {
+	/**
+	 * A musical performer
+	 */
+	Artist {
+		String name
+		Album* albums
+		
+		Iterable<Track> getOevre() {
+			albums.map[tracks].flatten
+		}
+	}  
+	 
+	/**
+	 * A record, CD, DVD or another collection of tracks
+	 */
+	Album {
+		String title
+		int year 
+		Track* tracks
+		
+		Duration getDuration() {
+			tracks.map[duration].reduce[Duration a, Duration b| a + b]
+		}
+	}
+	
+	Track {
+		String title
+		Duration duration
+	}
+	
+	Duration {
+		int seconds
+	
+		void fromString(String duration) {
+			val split = duration.split(':')
+			seconds = Integer::parseInt(split.get(0)) * 60 + Integer::parseInt(split.get(1))
+		}		
+		
+		String toString() {
+			Integer::toString(seconds / 60) + ':' + Integer::toString(seconds % 60)
+		}
+		
+		Duration operator_plus(Duration other) {
+			new Duration() [
+				seconds = this.seconds + other.seconds
+			]
+		}
+	}
+}
+```
+
+ Verified:
+- All `mongobean` tokens removed.
+- All comments preserved verbatim.
+- All whitespace, indentation (tabs), spacing before/after `{` and `}`, and line breaks unchanged.
+- No new features introduced (e.g., no inline beans).
+- Package and import structure intact.
+
+This is **Instance 2**, valid under **Grammar 2**.

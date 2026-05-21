@@ -1,0 +1,172 @@
+Understood. Let's carefully evolve **Instance 1** (which conforms to **Grammar 1**) into **Instance 2** (which must conform to **Grammar 2**), based on all observed changes.
+
+---
+
+###  Recap: Key Grammar Changes (Grammar 1 -> Grammar 2)
+
+####  **Rules removed / collapsed** (must be *fully removed* from Instance 2):
+| Grammar 1 Rule | Status in Grammar 2 | Action |
+|----------------|---------------------|--------|
+| `SQ_EncompassBegin` |  **Removed** | - |
+| `SQ_EncompassEnd` |  **Removed** | - |
+| Replaced by unified `SQ_Encompass` |  | Must replace `box ... end box` with single rule syntax: `box "title" #color ... end box` - *but wait!* In Grammar 2, `SQ_Encompass` **includes content**:  
+  ```xtext
+  SQ_Encompass:
+      'box' title=STRING color=SQ_Color
+          (NEWLINE | elements+=SQ_SequenceElement)*
+      NEWLINE 'end' 'box';
+  ```  
+  So `box "Cloud Services" #8877cc ... end box` is still valid - **but** the *Grammar 1* style used two separate rules (`SQ_EncompassBegin`/`SQ_EncompassEnd`) + `SQ_SequenceElement` alternation. In Grammar 2, `SQ_Encompass` is now a *single* `SQ_SequenceElement`, and **no nested `elements+=SQ_SequenceElement` in `SQ_EncompassBegin`** - the recursion is inside `SQ_Encompass`.  
+   **Instance 1's `box ... end box` block remains syntactically valid**, but *must not* contain standalone `SQ_EncompassBegin`/`SQ_EncompassEnd` tokens (which it never did - it used `box` and `end box` naturally).  
+  -> So this construct **can be kept as-is**, provided the parser expects single `box ... end box` with no extra tokens.
+
+| Grammar 1 Rule | Status | Action |
+|----------------|--------|--------|
+| `SQ_ParticipantDefiniton` (yes, typo: "Definiton") |  Still exists - but note: in Grammar 2, the rule is unchanged structurally. |
+
+####  **Rules renamed / refactored**:
+| Grammar 1 | Grammar 2 | Action |
+|-----------|-----------|--------|
+| `SQ_Color` (not present in G1 - used `COLOR`) | Introduced in G2 as *non-terminal* (`SQ_Color: color=HEXCOLOR \| NAMEDCOLOR`) | In Instance 1, only hex colors (`#eeaaaa`, `#aF7`, etc.) were used - these will still parse as `HEXCOLOR`. No change needed. |
+| `SQ_SkinparamValue` | New sub-rule (`SQ_SkinparamValue: SQ_Color \| INT \| ID \| STRING`) | Replaces multiple `colorval=`/`numberval=`/etc. -> now single `value=`.  
+  Instance 1 has:  
+  `skinparam roundcorner 25`  
+  In G2, this maps to: `skinparam name=ID value=SQ_SkinparamValue` where `value=INT` (25).  
+   Still valid - no textual change needed. |
+| `PT_ParameterMap` | Changed delimiters:  
+  G1: `'[' ... ']'`  
+  G2: `'{' ... '}'` |  **CRITICAL**: This **must be changed** in Instance 2.  
+  `request(..., [location : "dingolfing"])` -> must become `request(..., {location : "dingolfing"})`.  
+  Same for `response(..., [ event: "42" ])` -> `response(..., { event: "42" })`. |
+| `SQ_Group` / `SQ_GroupAlternative` | Unchanged structurally - `alt/else/end` still valid. |  No change. |
+
+####  **New tokens / terminals added**:
+- `NAMEDCOLOR` terminal added (e.g., `#lightgray`) - but Instance 1 uses *only* hex colors, so **no change needed** for colors.  
+- `SQ_EncompassBegin` and `SQ_EncompassEnd` *no longer exist* as separate rules - but as noted, `box ... end box` is now *one* rule (`SQ_Encompass`) - and the instance already uses that pattern, so **no action needed**.
+
+####  **Other changes**:
+- `SQ_Description` now includes `'...'` and `'=='` and `':'` explicitly in its literal list - but these were already allowed via `ANY_OTHER`, so no change needed.
+- `SQ_Delay` in Grammar 2 **no longer supports trailing `...`**:  
+  G1: `'...' (wait=PT_Wait)? description=SQ_Description '...'?)`  
+  G2: `'...' (wait=PT_Wait)? description=SQ_Description`  
+   Instance 1 has:  
+  `... wait(10 s) Auf schnes Wetter ;) ...`  
+  -> Per G2, the **trailing `...` must be removed**.
+
+- `SQ_Participant` in G2:  
+  G1 allowed `color=COLOR`  
+  G2: `color=SQ_Color` -> but since `SQ_Color` accepts `HEXCOLOR`, and hex colors still work -  no change.
+
+- `SQ_Skinparam`: G2 uses `value=SQ_SkinparamValue` instead of `colorval=COLOR ...` - but syntactically same tokens, so no textual change.
+
+---
+
+###  Required Edits for Instance 1 -> Instance 2
+
+Let's go line-by-line and apply changes:
+
+####  Keep (unchanged):
+- All comments (`'` and `/' '/`) - preserved.
+- Whitespace, newlines, blank lines - preserved.
+- `header`, `footer`, `title`, `hide footbox` - unchanged.
+- `actor "Alice" << (O, #eeaaaa) >> #aF7` - `#aF7` still valid `HEXCOLOR`.
+- `autonumber 3 2`, `participant "Multiline\nBob" as Bob`, `autoactivate on`, `activate Alice`, `||100||`, `== ... ==`, `note left of Alice #eba : ...`, `return response(...)` - all still valid.
+- `box "Cloud Services" #8877cc ... end box` - still valid as `SQ_Encompass`.
+- `destroy "CCC-Mock"`, `ref over Alice, Bob: ...`, `loop ... end`, `alt ... else ... end`, `[<-- Alice`, `@enduml` - unchanged.
+
+####  Remove trailing `...` in `SQ_Delay` (Grammar 1 -> 2):
+- `... wait(10 s) Auf schnes Wetter ;) ...`  
+  -> becomes:  
+  `... wait(10 s) Auf schnes Wetter ;)`
+
+####  Change `PT_ParameterMap` delimiter from `[...]` -> `{...}`:
+| Line in Instance 1 | Instance 2 |
+|--------------------|------------|
+| `[location : "dingolfing"]` | `{location : "dingolfing"}` |
+| `[ event: "42" ]` | `{ event: "42" }` |
+
+Note: Per Grammar 2, `PT_ParameterValue` is `ID \| STRING \| INT`, so `event: "42"` is still valid (`"42"` = STRING).
+
+---
+
+###  Final: Instance 2 (evolved from Instance 1 per Grammar 2)
+
+Here is the **exact** evolution of Instance 1 - respecting all rules above (no omissions, no additions, whitespace preserved, mandatory tokens kept):
+
+```
+@startuml
+
+' Configuration
+header All Features PUML Diagram
+footer Seite %page%/%lastpage%
+skinparam roundcorner 25
+title TITEL =)
+hide footbox
+
+actor "Alice" << (O, #eeaaaa) >> #aF7
+
+autonumber 3 2
+[--> Alice : Externer Trigger
+activate Alice
+
+participant "Multiline\nBob" as Bob
+
+autoactivate on
+Alice -> Bob : start()
+
+== Initialization ==
+
+/'
+Multiline comment:
+Syntax bellow yields a 100 pixel high spacing :)
+'/
+||100||
+
+box "Cloud Services" #8877cc
+create control "CCC-Mock"
+Bob o-> "CCC-Mock" ++: request(POST, "/event/${location}", {location : "dingolfing"})
+... wait(10 s) Auf schnes Wetter ;)
+end box
+return response(200||201, { event: "42" })
+
+"CCC-Mock" -> "CCC-Mock" : bootSkynet()
+
+== Hier wirds kritisch ==
+
+Bob<-[#0000aa]->Alice : Comunicacin muy importante
+
+ref over Alice, Bob: Hier hngt ein ref Kasten\nmit mehreren Zeilen Text\n
+
+== Schicksalskram ==
+
+alt robot takeover
+  Alice -[#ffaaaa]>x "CCC-Mock" !! : Sie wurden soeben terminiert
+  destroy "CCC-Mock"
+  note left of Alice #eba : Alice ist groer Fan\nder Terminator Filmreihe ;)
+else peacful
+  loop 100 times
+    Alice -> "CCC-Mock" : request(POST, "/gift")
+    "CCC-Mock" -> Alice : Thank you =)
+  end
+end
+
+[<-- Alice : Result 
+
+@enduml
+```
+
+---
+
+###  Validation Checklist
+
+| Check | Status |
+|------|--------|
+| Trailing `...` removed in delay |  `... wait(10 s) ...` -> `... wait(10 s)` |
+| `[]` in `PT_ParameterMap` -> `{}` |  Both occurrences changed |
+| No extra/missing newlines, tabs, or comments |  Identical layout |
+| No missing or added tokens |  All `'` comments, `#`, `<< >>`, `==`, etc. preserved |
+| `box ... end box` structure preserved |  Still valid under `SQ_Encompass` |
+| No optional constructs added (per rule 2) |  We did *not* add named colors or extra alternatives |
+| All mandatory tokens (e.g., `@enduml`) kept |  |
+
+Let me know if you'd like a diff view or further validation!

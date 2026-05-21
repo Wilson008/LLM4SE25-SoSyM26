@@ -1,0 +1,148 @@
+Understood. I will carefully evolve **Instance 1** (Grammar 1) -> **Instance 2** (Grammar 2) by applying only the *syntactic and structural changes* observed in the grammar evolution, while preserving **all content, comments, whitespace, formatting, and semantics** exactly - per your strict requirements.
+
+---
+
+###  Summary of Grammar 2 -> Grammar 1 Changes (Affects Instance Transformation)
+
+| Grammar 1 Rule | Grammar 2 Equivalent | Transformation Required? | Reason |
+|----------------|----------------------|--------------------------|--------|
+| `PreparedConstantValue` with `def name=ConstID 'as' value=ValueExpression ';'` | `PreparedValue` with `'val' name=ConstID ':' value=ValueExpression ';'` |  Yes | `as` -> `:`, `def` -> `val` |
+| `PreparedStatement` with `'def' name=Name 'on' statement=Statement ';'` | `PreparedStatement` with `'def' name=Name ':' statement=Statement ';'` |  Yes | `'on'` -> `':'` |
+| `PreparedActionSet` with `'def' name=Name 'do' actions+=Action (',' actions+=Action)* ';'` | `PreparedActionSet` with `'set' name=Name ':' actions+=Action (',' actions+=Action)* ';'` |  Yes | `'def' ... 'do'` -> `'set' ... ':'` |
+| `ValueExpression` includes `ConstantValueReference` | Now uses `ValueReference` (alias) |  No change - cross-ref still resolves same entities | Syntax unchanged in usage |
+| Semicolon `';'` mandatory in G1 for declarations | Optional `';'?` in G2 for declarations & sensor/actor lists |  No mandatory change - preserve `;` (since Instance 1 has them, and we keep *exact* formatting) |
+| `Name` vs `ConstID` | No change | - | identifiers unchanged |
+| `BooleanSensorStatement` / `FloatSensor` cross-refs | No change | - | syntax unchanged (`sensor?`, qualified names) |
+| `StatementReference` / `ActionSetReference` | No change | - | usage unchanged |
+
+>  **Deleted in Grammar 2**:  
+> - **No grammar rules are *fully* deleted**, but *phrases* changed:  
+>   - `'on'` for statement definition is gone (replaced by `:`)  
+>   - `'do'` for action set definition is gone (replaced by `:`)  
+>   - `'as'` for constants is gone (replaced by `:`)  
+> - These keywords must be **removed from Instance 1**, and replaced *only* where they syntactically belong (i.e., as delimiters, not content).
+
+>  **Critical**: We do **not** remove or omit *any* comment, blank line, indentation, or trailing whitespace - only replace the *reserved syntax keywords* (`def ... on`, `def ... do`, `def ... as`) with the new equivalents.
+
+---
+
+###  Step-by-Step Transformation Rules for Instance 1 -> Instance 2
+
+| Original Pattern (Grammar 1) | Target Pattern (Grammar 2) | Example (Instance 1 -> 2) |
+|------------------------------|----------------------------|---------------------------|
+| `def <name> as <value>;` | `val <name> : <value>;` | `def LightThreshold as 0.4;` -> `val LightThreshold : 0.4;` |
+| `def <name> on <statement>;` | `def <name> : <statement>;` | `def hell on light >= LightThreshold and spaet;` -> `def hell : light >= LightThreshold and spaet;` |
+| `def <name> do <actions>;` | `set <name> : <actions>;` | `def srRadOn do sr.radiator: true, sr.roofWindows: false;` -> `set srRadOn : sr.radiator: true, sr.roofWindows: false;` |
+| Semicolons: keep all existing ones (even if optional in G2), do not delete/add | - | Preserve `;` exactly as in Instance 1 |
+| Comments, whitespace, line breaks: **unchanged** | - | Retain all inline and block comments, indentation, spacing |
+
+>  **No new syntactic features added** - only *replacements* of specific keyword sequences.
+
+---
+
+###  Evolved Instance 2 (Follows Grammar 2)
+
+```dsl
+house {
+	@clock time
+	@temp temp
+	@rain rain
+	@light light
+	@rain hell
+	
+	@lamp lamps
+	@boiler boiler
+}
+room lr { // living room
+	@temp temp
+	@light light
+	@switch lightSwitch
+	
+	@roller rollers
+	@lamp lamps
+	@radiator radiator
+}
+room sr { // sleeping room
+	@temp temp
+	@light light
+	@number numberpad
+	
+	@roller rollers
+	@roof roofWindows
+	@radiator radiator
+}
+room ki { // kitchen
+	@temp temp
+	@light light
+	@switch lightSwitch
+	
+	@roller rollers
+	@roof roofWindows
+	@radiator radiator
+	@coffee coffee
+	@lamp lamps
+}
+program {
+	val LightThreshold : 0.4;
+	val IndoorLightThreshold : LightThreshold;
+	val OL_DIM : 23.0;
+	val OL_SENSOR : light;
+	
+	def hell : light >= LightThreshold and spaet;
+	def spaet : time >= 23.0;
+	set srRadOn : sr.radiator: true, sr.roofWindows: false;
+
+	on !hell do lamps: 0; // Switch off outdoor lights on sunrise
+	on hell do lamps: 1; // Switch on outdoor lights on sunset
+	on OL_SENSOR <= IndoorLightThreshold and time >= OL_DIM do lamps: 0.2; // Dimm outdoor lights after 23 o'clock to save energy
+	on time >= 4.00 do lamps: 1; // Fully power outdoor lights at 4 o'clock due to laws
+	
+	on time >= 7.30 do boiler: true; // Heat up water at 7:30
+	on time >= 8.00 do ki.coffee: true; // Get fresh coffee in the morning
+	on time >= 8.30 do ki.coffee: false; // But not to much
+	on time >= 10.00 do boiler: false; // We now have enough warm water and are all up
+	
+	on sr.temp >= 18 do sr.radiator: false; // Switch off radiator above 18 degrees, it's warm enough
+	on sr.temp >= 19 and temp <= 19 or not rain? do sr.roofWindows: true; // If it get's to hot in the sleeping room and 
+															  // it's fresher outdoor: Open Windows. 
+	on sr.temp <= 18 and temp <= 18 do sr.roofWindows: false; // Close windows if it's to cold
+	on sr.temp >= 19 and temp >= 20 do sr.roofWindows: false; // Close windows if it's to warm outside
+	on temp >= 18 and light >= 0.5 do sr.rollers: true; // Close rollers if it's warm and sun is shining (into room)
+	on temp <= 18 do sr.rollers: false; // Open rollers if it's not too warm in room
+	on light <= 0.5 do sr.rollers: false; // Or its' not longer bright outdoor
+	on sr.temp <= 17 do srRadOn; // Boot up radiator if it's too cold
+	
+	on lr.temp >= 21 and light >= 0.5 do lr.rollers: true; // Close rollers in living room if sun is heat everything up
+	on ki.temp >= 21 and light >= 0.5 do ki.rollers: true;
+	on lr.temp <= 17 do lr.radiator: true; // Switch on radiator if it's to cold
+	on ki.temp <= 17 do ki.radiator: true, ki.roofWindows: false;
+	on lr.temp >= 20 do lr.radiator: false;
+	on ki.temp >= 20 do ki.radiator: false;
+	on temp <= 20 do lr.rollers: false; // Open rollers if it's not too warm in room
+	on temp <= 20 do ki.rollers: false;
+	on light <= 0.5 do lr.rollers: false; // Or its' not longer bright outdoor
+	on light <= 0.5 do ki.rollers: false; 
+	
+	on lr.lightSwitch? do lr.lamps: 1.0;
+	on not lr.lightSwitch? do lr.lamps: 0.0;
+	on ki.lightSwitch? do ki.lamps: 1.0;
+	on !ki.lightSwitch? do ki.lamps: 0.0;
+}
+```
+
+---
+
+###  Validation Against Your Requirements
+
+| Requirement | Status |
+|-------------|--------|
+|  No mandatory elements omitted (`{`, `}`, `'on'`, `'do'`, etc.) preserved |  |
+|  No optional/new syntax added (e.g., no `;` removed) |  |
+|  All comments, blank lines, indentation, and whitespace (e.g., `// Switch off...`, line 72-73 alignment) preserved |  |
+|  Deleted G1 rules (`def ... on`, `def ... do`, `def ... as`) replaced *only* where syntactically valid (no overreach) |  |
+|  No false references added (e.g., `LightThreshold` still resolves via `val ... :`, cross-ref still valid) |  |
+|  Output is non-empty and complete |  |
+
+---
+
+ **Instance 2 is ready** - syntactically compatible with **Grammar 2**, semantically identical to **Instance 1**, and faithfully preserved in form. Let me know if you'd like it as a downloadable file, or extended to cover edge cases (e.g., if future Grammar 2 rules *add* optional fields like `if`/`else`).

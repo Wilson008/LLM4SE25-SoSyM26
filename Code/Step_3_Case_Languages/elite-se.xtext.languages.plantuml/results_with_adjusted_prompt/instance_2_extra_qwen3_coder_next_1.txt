@@ -1,0 +1,151 @@
+Understood. I will now systematically evolve **Instance 1** (which conforms to **Grammar 1**) into **Instance 2** (conforming to **Grammar 2**), using the detailed grammar comparison and rules you've specified.
+
+---
+
+###  Summary of Key Divergences (from previous analysis)
+
+| # | Change in Grammar 2 | Impact on Instance 1 |
+|---|----------------------|----------------------|
+| 1 | `SQ_EncompassBegin` + `SQ_EncompassEnd` merged into single `SQ_Encompass` | No syntactic change needed - the `box ... end box` block is already unified in syntax. |
+| 2 | `PT_ParameterMap` changed from `[...]` to `{...}` | **Required**: Replace *all* parameter maps ` [...] ` with `{ ... }` |
+| 3 | `PT_Parameter` now allows `name=ID (':' value=PT_ParameterValue)?` (i.e., `:` is optional) | No change needed - existing `location : "dingolfing"` remains valid; can keep as-is (optional colon is allowed). |
+| 4 | `SQ_Delay` no longer allows trailing `...` | `... wait(10 s) ...` -> must become `... wait(10 s)` |
+| 5 | `SQ_SkinparamValue` no longer separate `colorval=COLOR` etc. - now unified `value=SQ_SkinparamValue` | No change needed - `skinparam roundcorner 25` is still valid (`INT` matches `SQ_SkinparamValue`) |
+| 6 | `SQ_Participant.color` changed from `COLOR` to `SQ_Color` (but `SQ_Color` accepts `HEXCOLOR` or `NAMEDCOLOR`) | No change needed - `#aF7`, `#eeaaaa`, etc., are still valid `HEXCOLOR` (Grammar 2 same `HEXCOLOR` terminal) |
+| 7 | `SQ_Note` no longer uses `color=(SQ_Color)?` syntax - **but it does support it**, and it's unchanged in semantics | No change needed |
+| 8 | `SQ_Divider` simplified: `'==' label=SQ_Description` (no trailing `==`) - but in Grammar 1 it was `'==' label=SQ_Description '=='` |  **Critical**: All `== ... ==` must become `== ...` (single `==` at end removed) |
+| 9 | `SQ_Response` in `PT_Response`: acceptable codes now use `'\|' '\|'` (i.e., `||`) is still allowed - no change |  Fine |
+| 10 | `SQ_LifetimeHint` semantics unchanged (`++`, `!!`, etc.) |  Fine |
+
+---
+
+###  Step-by-Step Transformation
+
+Let's now apply the *required* changes to **Instance 1** to produce **Instance 2**.
+
+####  Required Changes:
+1. `== label ==` -> `== label`  
+   - Found in:  
+     - `== Initialization ==` -> `== Initialization`  
+     - `== Hier wirds kritisch ==` -> `== Hier wirds kritisch`  
+     - `== Schicksalskram ==` -> `== Schicksalskram`
+
+2. `... wait(10 s) ...` -> `... wait(10 s)`  
+   - Found in: `... wait(10 s) Auf schnes Wetter ;) ...` -> `... wait(10 s) Auf schnes Wetter ;)`
+
+3. `[location : "dingolfing"]` -> `{location : "dingolfing"}`  
+   - And `[ event: "42" ]` -> `{ event: "42" }`  
+   - And `acceptableCodes+=INT ('\|' '|' ...)` stays - **no change to `response(200\|\|201, ...)`** because that's part of the `PT_Response` *inside* the `response(...)`, not `PT_ParameterMap`.  
+   - So only the **message parameter maps** change.
+
+####  Optional/Not Changed:
+- `SQ_Encompass` is unified - but the instance already uses `box ... end box`, no change needed.
+- `SQ_Skinparam` accepts `value=SQ_SkinparamValue`, which includes `INT` - `skinparam roundcorner 25` remains unchanged.
+- No need to use named colors (`#red`) - instance only uses hex.
+
+####  Preserved:
+- Comments (`' ... `'`) - unchanged
+- Newlines, spacing, indentation - preserved *exactly*
+- `<< (O, #eeaaaa) >>` stereotype syntax - unchanged ( Grammar 2 still supports it)
+- `participant "Multiline\nBob" as Bob` - unchanged (newlines in `STRING` allowed)
+- `SQ_Note` syntax - unchanged (Grammar 2 retains same structure)
+- `return response(...)` - unchanged (only parameter map changed, but here it's `[]` - wait, no! `response(200||201, [ event: "42" ])` uses `[ ... ]` - so this must change)
+
+ **Correction**:  
+`response(200\|\|201, [ event: "42" ])` contains a `PT_ParameterMap`, so **must become** `response(200\|\|201, { event: "42" })`
+
+Also:  
+`request(POST, "/event/${location}", [location : "dingolfing"])` -> `request(POST, "/event/${location}", {location : "dingolfing"})`
+
+####  Final list of changes:
+
+| Original | Updated |
+|---------|---------|
+| `== Initialization ==` | `== Initialization` |
+| `== Hier wirds kritisch ==` | `== Hier wirds kritisch` |
+| `== Schicksalskram ==` | `== Schicksalskram` |
+| `... wait(10 s) Auf schnes Wetter ;) ...` | `... wait(10 s) Auf schnes Wetter ;) ` |
+| `[location : "dingolfing"]` | `{location : "dingolfing"}` |
+| `[ event: "42" ]` (in response) | `{ event: "42" }` |
+
+---
+
+###  Final Instance 2 (conforming to Grammar 2)
+
+```plantuml
+@startuml
+
+' Configuration
+header All Features PUML Diagram
+footer Seite %page%/%lastpage%
+skinparam roundcorner 25
+title TITEL =)
+hide footbox
+
+actor "Alice" << (O, #eeaaaa) >> #aF7
+
+autonumber 3 2
+[--> Alice : Externer Trigger
+activate Alice
+
+participant "Multiline\nBob" as Bob
+
+autoactivate on
+Alice -> Bob : start()
+
+== Initialization
+
+/'
+Multiline comment:
+Syntax bellow yields a 100 pixel high spacing :)
+'/
+||100||
+
+box "Cloud Services" #8877cc
+create control "CCC-Mock"
+Bob o-> "CCC-Mock" ++: request(POST, "/event/${location}", {location : "dingolfing"})
+... wait(10 s) Auf schnes Wetter ;) 
+end box
+return response(200||201, { event: "42" })
+
+"CCC-Mock" -> "CCC-Mock" : bootSkynet()
+
+== Hier wirds kritisch
+
+Bob<-[#0000aa]->Alice : Comunicacin muy importante
+
+ref over Alice, Bob: Hier hngt ein ref Kasten\nmit mehreren Zeilen Text\n
+
+== Schicksalskram
+
+alt robot takeover
+  Alice -[#ffaaaa]>x "CCC-Mock" !! : Sie wurden soeben terminiert
+  destroy "CCC-Mock"
+  note left of Alice #eba : Alice ist groer Fan\nder Terminator Filmreihe ;)
+else peacful
+  loop 100 times
+    Alice -> "CCC-Mock" : request(POST, "/gift")
+    "CCC-Mock" -> Alice : Thank you =)
+  end
+end
+
+[<-- Alice : Result 
+
+@enduml
+```
+
+---
+
+###  Validation Checklist
+
+| Check | Status |
+|------|--------|
+|  All `== X ==` -> `== X` | Done |
+|  Trailing `...` removed from `SQ_Delay` | Done |
+|  All `PT_ParameterMap` brackets `[...]` -> `{...}` | Done (2 locations) |
+|  All comments, newlines, spacing, `||100||`, `++`, `!!`, `\n` preserved | Done |
+|  No optional/new (unified) rules added (e.g., no `NAMEDCOLOR` used) | Done |
+|  No mandatory elements omitted (e.g., `' Configuration'` comment intact) | Done |
+|  Instance remains syntactically valid per **Grammar 2** |  (based on grammar rules) |
+
+Let me know if you'd like a version with line numbers or diff highlights.

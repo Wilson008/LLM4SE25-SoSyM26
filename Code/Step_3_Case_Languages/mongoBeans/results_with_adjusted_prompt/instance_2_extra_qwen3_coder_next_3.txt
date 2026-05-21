@@ -1,0 +1,123 @@
+Understood. Let's proceed step by step.
+
+---
+
+###  Recap: Grammar Evolution
+
+**Grammar 1** -> **Grammar 2** key change:
+
+- In `MongoProperty`, the rule changed from:  
+  `type=JvmTypeReference (many?='*')? name=ValidID`  
+  to:  
+  `type=JvmTypeReference \| inlineType=MongoBean (many?='*')? name=ValidID`
+
+So Grammar 2 adds **an alternative**: a property may be typed **not only by `JvmTypeReference` (i.e., a reference to an external/declared type)**, but also **by an inline `MongoBean` definition**.
+
+Crucially:
+- No rule was *deleted* in Grammar 2 - all existing constructs (`PackageDeclaration`, `Import`, `MongoBean`, `MongoOperation`, `MongoProperty` with `JvmTypeReference`) are still present.
+- The only syntactic *addition* is the new disjunct `inlineType=MongoBean`.
+- Per instruction #2: **since `inlineType=MongoBean` is optional (via `|`), we are NOT required to instantiate it**. We may choose to use it, but should not be forced to.
+
+---
+
+###  Analyze Instance 1 (Grammar 1-valid) for Compatibility with Grammar 2
+
+Instance 1 contains only **top-level `mongobean`s** and uses:
+- `String`, `int`, `Iterable<Track>`, `Album`, `Track`, `Duration` as types -> all valid `JvmTypeReference`s (resolved via scoping to `mongobean`s).
+- No inline `mongobean` usage - all properties use `type=JvmTypeReference`.
+
+Since Grammar 2 *subsumes* Grammar 1 (i.e., every Grammar 1-valid instance is also Grammar 2-valid), **Instance 1 already conforms to Grammar 2**, *without modification*.
+
+BUT - per your instruction, you want me to:
+> *"modify instance_1 and get instance_2, which will follow grammar_2"*
+
+and  
+> *"do not omit any mandatory elements"*  
+> *"do not miss or add any auxiliary information"*  
+> *"if grammar_2 adds a new optional OR alternative, do not instantiate it"*
+
+So the **minimal and safest evolution** is to **preserve Instance 1 exactly** - because it uses *only* the existing `type=JvmTypeReference` path, which is still valid in Grammar 2.
+
+However, your instruction also says:
+> *"When evolving the instance, please do not omit any mandatory elements [...] and do not miss or add any auxiliary information"*
+
+-> Therefore, **we must not add** anything new (e.g., no inline beans), and **must not remove** anything.
+
+ Conclusion: **Instance 2 = Instance 1**, exactly.
+
+But - let's double-check instruction #4:
+> *"pay special attention to grammar rules that have been deleted in the evolved grammar. If a grammar rule no longer exists in Grammar 2, you must remove all instances of that rule from the evolved instance."*
+
+ Are *any* rules deleted in Grammar 2?  
+No. Grammar 2 retains:
+- `MongoFile`, `Import`, `AbstractElement`, `PackageDeclaration`, `MongoBean`, `AbstractFeature`, `MongoProperty`, `MongoOperation`, `QualifiedNameWithWildcard`
+
+The only difference is *expansion* of `MongoProperty`, not deletion.
+
+So yes - **Instance 1 is already valid for Grammar 2**, and no changes are needed.
+
+---
+
+###  Final Output: Instance 2 (evolved from Instance 1 per Grammar 2)
+
+Below is **Instance 2**, identical to Instance 1, with:
+- All comments preserved (including line breaks and `/** ... */` format),
+- All indentation, spacing, and formatting preserved exactly,
+- All mandatory tokens (`import`, `package`, `mongobean`, `{`, `}`, etc.) unchanged,
+- No optional/alternative grammar features added (since per instructions, we're not required to instantiate them),
+- No rules removed (none were deleted in Grammar 2).
+
+```
+import java.util.*
+
+package org.musicdb {
+	/**
+	 * A musical performer
+	 */
+	mongobean Artist {
+		String name
+		Album* albums
+		
+		Iterable<Track> getOevre() {
+			albums.map[tracks].flatten
+		}
+	}  
+	 
+	/**
+	 * A record, CD, DVD or another collection of tracks
+	 */
+	mongobean Album {
+		String title
+		int year 
+		Track* tracks
+		
+		Duration getDuration() {
+			tracks.map[duration].reduce[Duration a, Duration b| a + b]
+		}
+	}
+	
+	mongobean Track {
+		String title
+		Duration duration
+	}
+	
+	mongobean Duration {
+		int seconds
+	
+		void fromString(String duration) {
+			val split = duration.split(':')
+			seconds = Integer::parseInt(split.get(0)) * 60 + Integer::parseInt(split.get(1))
+		}		
+		
+		String toString() {
+			Integer::toString(seconds / 60) + ':' + Integer::toString(seconds % 60)
+		}
+		
+		Duration operator_plus(Duration other) {
+			new Duration() [
+				seconds = this.seconds + other.seconds
+			]
+		}
+	}
+}
+```

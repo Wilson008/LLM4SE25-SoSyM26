@@ -1,0 +1,104 @@
+Understood. I will rigorously follow your 5 constraints to evolve **Instance 1** (Grammar 1-compliant) into **Instance 2** (Grammar 2-compliant), preserving all syntax, whitespace, and structure, while only making changes *dictated by the grammar evolution*.
+
+---
+
+###  **Grammar Evolution Summary (Key Points Affecting Instance)**
+
+| Grammar Element | Grammar 1 | Grammar 2 | Impact on Instance |
+|-----------------|-----------|-----------|---------------------|
+| `Modifier` rule |  Exists |  **Removed** | -> **Must be removed entirely** |
+| `Validator` rule |  |  **Added** | -> Replace `Modifier` with `validator` (same structure, just keyword change) |
+| `Method.modifiers` reference | `modifiers += [Modifier]` | `validators += [Validator]` | -> Change keyword: `modifiers:` -> `validators:` |
+| `Contract` body alternatives | `modifiers+=Modifier` | `validators+=Validator` | -> Remove all `Modifier` blocks, add `Validator` blocks |
+| `DataStore` rule |  |  | -> **Optional**, so **do not add** (per Constraint 2) |
+| Other elements (Attribute, Event, Param, Output, DataType, etc.) | Identical | Identical | -> No change |
+
+ All other syntax (indentation, spacing, comments, quotes, line breaks) must be preserved *exactly*.
+
+---
+
+###  **Instance 1 (Repeated for Reference)**
+
+```xtext
+Contract SimpleContract {
+	version: "v1.0.0"
+	hasReceive
+	ownership
+	modifiable total integer
+	
+	Modifier onlyOwner () {
+		message: "Only the contract owner can call this function."
+		validation: "msg.sender == owner"
+	}
+	
+	Modifier validNumber(x integer) {
+		message: "The number must be greater than 4"
+		validation: "x>4"
+	}
+	
+	method example (x integer, name string, lastname string) -> x integer, name string {
+		description: "This is a sample of method"
+		modifiers: onlyOwner, validNumber
+		events: XUpdated, NameUpdated 
+	}
+	
+	event XUpdated (x integer){
+		description: "Este evento es para notificar cuando el numero se ha actualizado"
+	}
+	
+	event NameUpdated(name string){
+		description: "Este evento es para notificar cuando el name se ha actualizado"
+	}
+}
+```
+
+---
+
+###  **Evolved Instance 2 (Grammar 2-compliant)**
+
+Changes applied:
+- `Modifier` -> `validator`  
+- `modifiers:` -> `validators:`  
+- Everything else preserved *exactly* (spaces, punctuation, empty lines, trailing space in `events: XUpdated, NameUpdated `)
+
+```xtext
+Contract SimpleContract {
+	version: "v1.0.0"
+	hasReceive
+	ownership
+	modifiable total integer
+	
+	validator onlyOwner () {
+		message: "Only the contract owner can call this function."
+		validation: "msg.sender == owner"
+	}
+	
+	validator validNumber(x integer) {
+		message: "The number must be greater than 4"
+		validation: "x>4"
+	}
+	
+	method example (x integer, name string, lastname string) -> x integer, name string {
+		description: "This is a sample of method"
+		validators: onlyOwner, validNumber
+		events: XUpdated, NameUpdated 
+	}
+	
+	event XUpdated (x integer){
+		description: "Este evento es para notificar cuando el numero se ha actualizado"
+	}
+	
+	event NameUpdated(name string){
+		description: "Este evento es para notificar cuando el name se ha actualizado"
+	}
+}
+```
+
+ **Verification against constraints**:
+1. **No omitted mandatory elements** - single quotes preserved (none), keywords like `'validator'`, `'modifiers:'` (now `validators:`) used correctly.
+2. **No extra optional/alternative elements added** - no `DataStore`, no `stateMutability`, no new attributes.
+3. **Exact format preserved** - trailing space after `NameUpdated`, blank lines between sections, indentation (tabs/spaces as original) unchanged.
+4. **Deleted `Modifier` rule fully removed** - all two instances replaced by `validator`.
+5. **Non-empty result produced** - full instance provided.
+
+This is the correct, minimal, strictly compliant evolution of Instance 1 -> Instance 2.

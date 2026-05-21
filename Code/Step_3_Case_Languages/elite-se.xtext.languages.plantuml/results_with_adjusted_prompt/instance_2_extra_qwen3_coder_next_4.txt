@@ -1,0 +1,111 @@
+Understood! Let's carefully evolve **Instance 1** (which conforms to **Grammar 1**) into **Instance 2**, conforming to **Grammar 2**, using the strict principles you specified.
+
+---
+
+###  **Key Grammar Differences (Summary of Relevance to Instance)**
+
+| Grammar Change | Impact on Instance | Grammar 1 Rule (Deleted/Changed) | Grammar 2 Replacement |
+|----------------|-------------------|-------------------------------|------------------------|
+| **1. `SQ_EncompassBegin` + `SQ_EncompassEnd` -> single `SQ_Encompass`** |  Instance can stay *unchanged* for `box ... end box`, since the *syntax* remains identical - but note: Grammar 2 now expects **exactly** `'box' title=STRING color=SQ_Color (NEWLINE \| elements+=SQ_SequenceElement)* NEWLINE 'end' 'box'` -> no ambiguity. Instance 1 already matches this. |
+| **2. `SQ_Divider` changed from `'==' label=SQ_Description '=='` -> `'==' label=SQ_Description`** (i.e., **trailing `==` removed**) |  **CRITICAL**: Instance 1 contains `== ... ==`, but Grammar 2 expects *only* `== ...`, *no trailing `==`*. So **we must remove trailing `==`** from all dividers. |
+| **3. `SQ_Color` is now a formal rule (instead of direct `COLOR` terminal)** | No syntactic change - color literals (`#eeaaaa`, `#aF7`, `#8877cc`, `#0000aa`, `#ffaaaa`, `#eba`, `#FF0000`) remain valid, as they now parse as either `HEXCOLOR` or `NAMEDCOLOR`. Instance uses only HEX - still valid. |
+| **4. `PT_ParameterMap` changed from `[...]` -> `{...}`** |  Instance 1 uses `[location : "dingolfing"]` and `[ event: "42" ]` - **these must change to `{...}`**. |
+| **5. `PT_Parameter` syntax changed** | Grammar 1: `name=ID ':' value=STRING`<br>Grammar 2: `name=ID (':' value=PT_ParameterValue)?` -> optional `:` and value. But in Instance 1, all params have `name : "value"` -> still valid (since `value=STRING` is a `PT_ParameterValue`).  No change needed. |
+| **6. `SQ_Delay` changed from `'...' (wait=PT_Wait)? description=SQ_Description '...'` -> `'...' (wait=PT_Wait)? description=SQ_Description` (trailing `...` removed)** |  Instance 1 has `... wait(10 s) Auf schnes Wetter ;) ...` - the **trailing `...` must be removed** per Grammar 2. |
+| **7. `SQ_Color` usage in `SQ_Participant`, `SQ_Stereotype`, `SQ_Note`, etc.** |  No change needed - syntax identical (`#hex`, but now also supports `#Name`). |
+| **8. `SQ_LifetimeHint` unchanged**, but note `SQ_Delay`'s `wait=PT_Wait` rule unchanged.  |
+| **9. `SQ_SkinparamValue` unified** - but syntax remains `'skinparam' name=ID value=...`, and Instance 1 uses `skinparam roundcorner 25`, which is `name=ID numberval=INT` in Grammar 1 -> In Grammar 2: `value=SQ_SkinparamValue: SQ_Color | INT | ID | STRING`, so `25` as `INT` still valid.  No change. |
+| **10. Removed: `SQ_Autonumber` with `step=INT` only allowed if *two* ints given** - no change; Instance 1 has `autonumber 3 2` -> still valid.  |
+
+ **Most critical updates required:**
+1. Change `== ... ==` -> `== ...` (remove trailing `==`)
+2. Change `request(..., [...])` -> `request(..., {...})`
+3. Change `response(..., [...])` -> `response(..., {...})`
+4. Change `... wait(...) ...` -> `... wait(...)` (remove trailing `...`)
+
+No other changes needed - and we preserve *all* comments, formatting, whitespace, newlines, and syntax structure.
+
+---
+
+###  **Instance 2 (Conforming to Grammar 2)**
+
+```plantuml
+@startuml
+
+' Configuration
+header All Features PUML Diagram
+footer Seite %page%/%lastpage%
+skinparam roundcorner 25
+title TITEL =)
+hide footbox
+
+actor "Alice" << (O, #eeaaaa) >> #aF7
+
+autonumber 3 2
+[--> Alice : Externer Trigger
+activate Alice
+
+participant "Multiline\nBob" as Bob
+
+autoactivate on
+Alice -> Bob : start()
+
+== Initialization
+
+/' 
+Multiline comment:
+Syntax bellow yields a 100 pixel high spacing :)
+'/
+||100||
+
+box "Cloud Services" #8877cc
+create control "CCC-Mock"
+Bob o-> "CCC-Mock" ++: request(POST, "/event/${location}", {location : "dingolfing"})
+... wait(10 s) Auf schnes Wetter ;)
+
+end box
+return response(200||201, { event: "42" })
+
+"CCC-Mock" -> "CCC-Mock" : bootSkynet()
+
+== Hier wirds kritisch
+
+Bob<-[#0000aa]->Alice : Comunicacin muy importante
+
+ref over Alice, Bob: Hier hngt ein ref Kasten\nmit mehreren Zeilen Text\n
+
+== Schicksalskram
+
+alt robot takeover
+  Alice -[#ffaaaa]>x "CCC-Mock" !! : Sie wurden soeben terminiert
+  destroy "CCC-Mock"
+  note left of Alice #eba : Alice ist groer Fan\nder Terminator Filmreihe ;)
+else peacful
+  loop 100 times
+    Alice -> "CCC-Mock" : request(POST, "/gift")
+    "CCC-Mock" -> Alice : Thank you =)
+  end
+end
+
+[<-- Alice : Result 
+
+@enduml
+```
+
+---
+
+###  **Verification of Changes**
+
+| Location in Instance 1 | Change Applied | Complies with Grammar 2? |
+|------------------------|----------------|--------------------------|
+| `== Initialization ==` -> `== Initialization` |  Removed trailing `==` |  `SQ_Divider: '==' label=SQ_Description;` |
+| `== Hier wirds kritisch ==` -> `== Hier wirds kritisch` |  |  |
+| `== Schicksalskram ==` -> `== Schicksalskram` |  |  |
+| `{location : "dingolfing"}` | Changed from `[location : "dingolfing"]` |  `PT_ParameterMap: '{' ... '}'` |
+| `{ event: "42" }` | Changed from `[ event: "42" ]` |  |
+| `... wait(10 s) Auf schnes Wetter ;) ...` -> `... wait(10 s) Auf schnes Wetter ;)` |  Removed trailing `...` |  `SQ_Delay: '...' (wait=PT_Wait)? description=SQ_Description;` (no trailing `...`) |
+| All other elements unchanged |  |  |
+
+ **No line, comment, whitespace, or control character omitted or added** - only minimal syntactic adjustments required for Grammar 2 compatibility.
+
+Let me know if you'd like a diff view or validation against Grammar 2!

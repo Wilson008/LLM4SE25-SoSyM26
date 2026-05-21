@@ -1,0 +1,122 @@
+Understood. Let's rigorously evolve **Instance 1** (Grammar 1) -> **Instance 2** (Grammar 2), following your constraints.
+
+---
+
+###  **Step 1: Identify Key Grammar Changes (Grammar 1 -> Grammar 2)**
+
+| Grammar 1 Feature | Status in Grammar 2 | Action Required |
+|-------------------|---------------------|----------------|
+| `modifiers+=Modifier` in `Contract` body |  Removed from `Contract` - replaced by `validators+=Validator`, `dataStores+=DataStore` | **Remove all top-level `Modifier` declarations from instance** |
+| `'Modifier' name=ID (...)` rule |  Deleted - replaced by `Validator` with `'validator'` | **Convert `Modifier` blocks to `Validator` blocks** (same semantics, new keyword) |
+| `modifiersKeyword='modifiers:' modifiers+=[Modifier]` in `Method` |  Replaced by `validators+=[Validator]` under `'validators:'` | **Update method to use `validators:` instead of `modifiers:`** |
+| `Event`, `Attribute`, `Method`, `Param`, `Output`, `DataType`, `version`, `hasReceive`, `ownership`, braces, etc. |  Preserved (with minor keyword changes) | **Keep unchanged**, unless explicitly affected |
+
+>  **Note on `DataStore`**: New optional construct (not used in Instance 1), so per your rules, we **do not add** any `dataStore` declarations - only remove/replace what's gone.
+
+---
+
+###  **Step 2: Apply Changes to Instance 1**
+
+Original **Instance 1** (Grammar 1):
+
+```xtext
+Contract SimpleContract {
+	version: "v1.0.0"
+	hasReceive
+	ownership
+	modifiable total integer
+	
+	Modifier onlyOwner () {
+		message: "Only the contract owner can call this function."
+		validation: "msg.sender == owner"
+	}
+	
+	Modifier validNumber(x integer) {
+		message: "The number must be greater than 4"
+		validation: "x>4"
+	}
+	
+	method example (x integer, name string, lastname string) -> x integer, name string {
+		description: "This is a sample of method"
+		modifiers: onlyOwner, validNumber
+		events: XUpdated, NameUpdated 
+	}
+	
+	event XUpdated (x integer){
+		description: "Este evento es para notificar cuando el numero se ha actualizado"
+	}
+	
+	event NameUpdated(name string){
+		description: "Este evento es para notificar cuando el name se ha actualizado"
+	}
+}
+```
+
+####  **Apply transformations**:
+
+1. **Replace `Modifier` -> `Validator`**  
+   - Change keyword `'Modifier'` -> `'validator'`
+   - Keep body, name, params, `message`, `validation`
+
+2. **Remove top-level `Modifier` block count**  
+   - Replace `Modifier onlyOwner...` + `Modifier validNumber...`  
+     with `validator onlyOwner...` + `validator validNumber...`
+
+3. **In `Method`: replace `modifiers: ...` -> `validators: ...`**  
+   - Keep references: `onlyOwner, validNumber` (now point to `Validator`s)
+
+4. **Everything else unchanged**: `version`, `hasReceive`, `ownership`, `attribute`, `event`, `method` signature, description, whitespace, line breaks.
+
+>  No `DataStore` added - per rule #2, optional/new constructs are *not* instantiated.
+
+---
+
+###  **Final Instance 2 (Grammar 2-compliant)**
+
+```xtext
+Contract SimpleContract {
+	version: "v1.0.0"
+	hasReceive
+	ownership
+	modifiable total integer
+	
+	validator onlyOwner () {
+		message: "Only the contract owner can call this function."
+		validation: "msg.sender == owner"
+	}
+	
+	validator validNumber(x integer) {
+		message: "The number must be greater than 4"
+		validation: "x>4"
+	}
+	
+	method example (x integer, name string, lastname string) -> x integer, name string {
+		description: "This is a sample of method"
+		validators: onlyOwner, validNumber
+		events: XUpdated, NameUpdated 
+	}
+	
+	event XUpdated (x integer){
+		description: "Este evento es para notificar cuando el numero se ha actualizado"
+	}
+	
+	event NameUpdated(name string){
+		description: "Este evento es para notificar cuando el name se ha actualizado"
+	}
+}
+```
+
+---
+
+###  Verification Against Grammar 2
+
+| Requirement | Met? |
+|-------------|------|
+| No mandatory elements omitted (e.g., quotes, colons, braces) |  |
+| No optional/new constructs added (e.g., `dataStore`) |  |
+| Original formatting (indentation, spacing, line breaks) preserved |  |
+| Deleted rule (`Modifier`) fully removed and replaced by `Validator` |  |
+| Cross-references updated (`modifiers:` -> `validators:`) |  |
+| `Modifier` names reused as `validator` names -> still valid IDs |  |
+
+ **Instance 2 is a faithful, minimal, and grammar-compliant evolution of Instance 1 into Grammar 2.**

@@ -1,0 +1,74 @@
+Based on the detailed comparison between **Grammar 1** and **Grammar 2**, and strictly applying your five constraints, here is the transformed instance - **Instance 2**, which conforms to **Grammar 2**, preserving *all structural, syntactic, and formatting fidelity* of Instance 1 except where Grammar 2 has changed or removed constructs.
+
+---
+
+###  Summary of Changes Applied (per your constraints):
+
+| Grammar Change | Applied in Instance 2? | Action Taken |
+|----------------|------------------------|--------------|
+| `'caffe-path'` -> `'caffePath'` (and made optional) |  | Changed to `'caffePath' = "$CAFFE_HOME"`; kept since value provided |
+| `'image-size'` -> `'imageSize'`, `'batch-size'` -> `'batchSize'`, etc. |  | All keys converted to camelCase (no hyphens/spaces) |
+| `branch` body: removed `'type' REFERENCE type=BranchType` |  | Deleted `'type -> residual'` line entirely (branch type was always `RESIDUAL`, now implicit) |
+| `'use-bias-term'` -> `'useBiasTerm'`, `'use-global-stats'` -> `'useGlobalStats'` |  | Updated to camelCase |
+| `'final-layer'` -> `'finalLayer'` |  | Updated literal to `'finalLayer'` |
+| `LayerBody`, `ConvLayerBody`, `PoolLayerBody`: keys like `'kernel-size'` -> `'kernelSize'` |  | Changed `'kernel-size'` -> `'kernelSize'` |
+| `branch` body: `'eltwiseOperation'` replaces `'operation'` |  | Changed `'operation -> PROD'` -> `'eltwiseOperation -> PROD'` |
+| Optional `caffePath` left as-is (present, so kept) |  | No change needed |
+
+ **No new attributes added** - we respected constraint #2 (e.g., no `trainDataPath`, `seed`, etc., unless present in Instance 1).
+ **No formatting changes** - preserved whitespace, indentation, commas, line breaks exactly.
+
+---
+
+###  Final Output: **Instance 2** (conforming to **Grammar 2**)
+
+```xtext
+network "DemoNet" {
+	epochs = 10
+	batchSize = 50
+	imageSize = 28
+    imageChannels = 1
+    outputLabels = 10
+
+    caffePath = "$CAFFE_HOME"
+    outputPath = "/media/xpitfire/data/temp"
+
+	updater -> sgd
+	learningRate = 0.003
+
+	conv   (name: "c1" in:data out:64)     { kernelSize = 6 }
+    conv   (name: "c2" 		   out:32)     { kernelSize = 3 }
+	conv   (name: "c3"         out:32)     { kernelSize = 1 }
+
+	branch (name: "b1" in:"c3" out:32)     {
+		eltwiseOperation -> PROD
+
+		conv (name: "bc1"      out:32)     { kernelSize = 1 }
+		norm (name: "bn1")				   { useGlobalStats = true }
+		scale(name: "bs1") 				   { useBiasTerm = true }
+	}
+
+	pool   (name: "p1"         out:3)      { type -> MAX, stride = 1 }
+
+	dense [(name: "d1"         out:512), 
+	       (name: "d2"         out:256)]
+
+	dense  (name: finalLayer  out:labels)
+}
+```
+
+---
+
+ **Verification Checklist**:
+- [x] No mandatory single-quoted keywords omitted (`network`, `conv`, `branch`, etc.)
+- [x] No new optional/alternative attributes added (e.g., no `seed`, `trainDataPath`, `dropout`, etc.)
+- [x] All whitespace, indentation (`\t` vs space preserved), commas, line breaks, and alignment retained *exactly*
+- [x] Deleted `type -> residual` ( Grammar 2 removes `BranchType` from `BranchBody`)
+- [x] `'final-layer'` -> `'finalLayer'` ( Grammar 2 only allows `'finalLayer'`)
+- [x] `'kernel-size'` -> `'kernelSize'`
+- [x] `'operation'` -> `'eltwiseOperation'`
+- [x] `'use-global-stats'` -> `'useGlobalStats'`
+- [x] `'use-bias-term'` -> `'useBiasTerm'`
+- [x] `'caffe-path'` -> `'caffePath'` (kept present, so not stripped)
+
+Let me know if you'd like this re-indented for readability, or need a validation report, or a comparison diff!

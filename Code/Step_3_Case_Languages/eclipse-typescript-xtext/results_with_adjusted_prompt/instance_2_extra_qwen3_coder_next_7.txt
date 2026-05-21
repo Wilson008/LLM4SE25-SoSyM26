@@ -1,0 +1,60 @@
+Based on the detailed comparison from earlier, here is the **evolved Instance 2** that conforms strictly to **Grammar 2**, derived from **Instance 1** while obeying all 5 constraints you specified.
+
+---
+
+###  **Instance 1 (Original, for Grammar 1)**:
+```
+module A { 
+ export interface X { s: string } 
+} 
+ 
+module B { 
+ /*var A = 1; */ 
+ import Y = A; 
+}
+```
+
+###  Key grammar changes affecting the instance (relevant to evolution):
+| Change | Effect on instance |
+|-------|-------------------|
+| **`Declaration` rule introduced** - `InterfaceOrClassDeclaration` is now *wrapped* by `Declaration` with optional `docComment` | Instance remains structurally compatible - no new *required* fields to add (since `docComment` is optional) |
+| **`ModuleElement` now uses `Declaration` instead of direct `ClassDeclaration \| InterfaceDeclaration`** |  Still satisfied - `export interface X { ... }` is now a `Declaration` (via `InterfaceOrClassDeclaration`) |
+| **`InterfaceDeclaration` & `ClassDeclaration` no longer assign `objectType=ObjectType` directly** - it's now done in `InterfaceOrClassDeclaration` |  No syntactic change - object body `{ ... }` remains attached to interface/class |
+| **`DocComment`, `AnnotationLine`, `DOC_*` terminals added** - but all optional (`docComment=?`) |  No change needed - instance has no doc comments, so none added |
+| **`TypeReference` now resolves to `[InterfaceOrClassDeclaration|QualifiedName]`** (vs. just `InterfaceDeclaration`) |  Still allows linking to interface `X`, but `import Y = A` still refers to a *module* `A`, which is **not** an `InterfaceOrClassDeclaration`. However:  
+-> *Constraint 2*: Do **not** instantiate optional branches (e.g., don't rewrite `import Y = A` to `import Y = module A` or similar).  
+-> *Constraint 3*: Preserve original whitespace/comments.  
+-> *Constraint 5*: Do **not** omit required elements - and `import Y = A` is syntactically valid in Grammar 2 (terminal-level), even if cross-reference *linking* may fail at runtime.  
+-> So we **keep it unchanged** - but note: `A` is still a module name, and `QualifiedName = ID ('.' ID)*` permits `"A"` as valid `QualifiedName`. Grammar 2 accepts it *syntactically*. |
+| **No rule was deleted that appears in Instance 1** |  All used constructs (`module`, `export`, `interface`, `import =`, `{`, `}`, etc.) remain in Grammar 2 |
+
+###  **Evolved Instance 2 (conforming to Grammar 2)**:
+```
+module A { 
+ export interface X { s: string } 
+} 
+ 
+module B { 
+ /*var A = 1; */ 
+ import Y = A; 
+}
+```
+
+>  **Why this is the correct evolution**:
+- No mandatory elements removed or altered (e.g., quotes, braces, semicolons, spaces).
+- All optional grammar additions (`docComment`, annotations, etc.) are left *omitted*, per Constraint 2.
+- No new constructs were added - only preserved.
+- No construct from Instance 1 has been removed - all syntax still exists in Grammar 2.
+- Although `import Y = A` references a *module*, and Grammar 2's `TypeReference` links to `InterfaceOrClassDeclaration`, **syntactically** the instance remains valid - Xtext will parse it; the cross-reference resolution is a *semantic* concern, not a syntactic one. Since the task is to adapt the *instance text* to match the grammar's syntax, and no syntactic change is required, we keep it as-is.
+
+ **Final Answer - Instance 2**:
+```
+module A { 
+ export interface X { s: string } 
+} 
+ 
+module B { 
+ /*var A = 1; */ 
+ import Y = A; 
+}
+```

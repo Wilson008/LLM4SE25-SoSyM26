@@ -1,0 +1,106 @@
+Understood - I will evolve **Instance 1** (which conforms to **Grammar 1**) into **Instance 2**, which must conform to **Grammar 2**, while strictly adhering to your constraints.
+
+Let's recap the *only* syntactic difference between Grammar 1 and Grammar 2 (from earlier analysis):
+
+| Grammar | Rule | Key Constraint |
+|---------|------|----------------|
+| **Grammar 1** | `MongoProperty: type=JvmTypeReference (many?='*')? name=ValidID;` | Type **must** be a `JvmTypeReference` (i.e., no inline mongobean allowed) |
+| **Grammar 2** | `MongoProperty: (type=JvmTypeReference \| inlineType=MongoBean) (many?='*')? name=ValidID;` | Type may be *either* `JvmTypeReference` *or* an **inline `MongoBean`** (anonymous) |
+
+ Crucially:
+-  **Grammar 2 does NOT remove any rules** - only *extends* `MongoProperty`.
+-  The new alternative `inlineType=MongoBean` is **optional** and in an **OR** relationship (`|`) - per your instruction #2, **we do NOT instantiate it** (i.e., we avoid inline mongobeans unless absolutely necessary, and here they are *not* required).
+-  **No rules were deleted** - so no element needs removal per instruction #4.
+
+ Therefore, **Instance 1 already conforms to Grammar 2**, because:
+- All `MongoProperty`s in Instance 1 use `JvmTypeReference` (e.g., `String`, `Album`, `Track`, `Duration`, `Iterable<Track>`)
+- None use inline `mongobean`, which is *permitted but not required* in Grammar 2.
+
+ Let's double-check each property in Instance 1:
+```xtext
+Artist {
+  String name                //  JvmTypeReference
+  Album* albums              //  JvmTypeReference + *
+}
+
+Album {
+  String title               // 
+  int year                   //  (int is a built-in JvmTypeReference)
+  Track* tracks              // 
+}
+
+Track {
+  String title               // 
+  Duration duration          // 
+}
+
+Duration {
+  int seconds                // 
+}
+```
+-> All are `JvmTypeReference` - no inline mongobean used.
+
+Also:
+- All other syntax (package declaration, imports, comments, formatting, operators, Xbase bodies) matches Grammar 2, since no other rules changed.
+
+###  Conclusion:
+**Instance 2 = Instance 1** (exact copy), because **Grammar 2 is a backward-compatible extension** of Grammar 1, and Instance 1 uses only features common to both.
+
+Now - per your instruction to **"always output your best attempt at the evolved instance"**, here is **Instance 2**, identical to Instance 1, preserving *all* whitespace, comments, formatting, and structure:
+
+```xtext
+import java.util.*
+
+package org.musicdb {
+	/**
+	 * A musical performer
+	 */
+	mongobean Artist {
+		String name
+		Album* albums
+		
+		Iterable<Track> getOevre() {
+			albums.map[tracks].flatten
+		}
+	}  
+	 
+	/**
+	 * A record, CD, DVD or another collection of tracks
+	 */
+	mongobean Album {
+		String title
+		int year 
+		Track* tracks
+		
+		Duration getDuration() {
+			tracks.map[duration].reduce[Duration a, Duration b| a + b]
+		}
+	}
+	
+	mongobean Track {
+		String title
+		Duration duration
+	}
+	
+	mongobean Duration {
+		int seconds
+	
+		void fromString(String duration) {
+			val split = duration.split(':')
+			seconds = Integer::parseInt(split.get(0)) * 60 + Integer::parseInt(split.get(1))
+		}		
+		
+		String toString() {
+			Integer::toString(seconds / 60) + ':' + Integer::toString(seconds % 60)
+		}
+		
+		Duration operator_plus(Duration other) {
+			new Duration() [
+				seconds = this.seconds + other.seconds
+			]
+		}
+	}
+}
+``` 
+
+This is a *valid* and *complete* instance for **Grammar 2**, with **zero changes** - as required.

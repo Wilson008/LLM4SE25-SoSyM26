@@ -1,0 +1,92 @@
+Thank you for the clear instructions. I'll now transform **Instance 1** (which conforms to **Grammar 1**) into **Instance 2**, conformant with **Grammar 2**, while rigorously respecting all your constraints.
+
+---
+
+###  Recap of Critical Grammar Changes (from Grammar 1 -> Grammar 2)
+
+| Change | Impact on Instance |
+|--------|--------------------|
+| **`caffe-path` -> `caffePath`** (optional in Grammar 2) | In Grammar 1, `caffe-path` is **mandatory**. In Grammar 2, it's optional (`('caffePath' ...)?`). Since Instance 1 includes it, we keep it - but rename key. |
+| **All keys converted to camelCase** (e.g., `image-size` -> `imageSize`, `output-labels` -> `outputLabels`, `use-bias-term` -> `useBiasTerm`, `use-global-stats` -> `useGlobalStats`, `kernel-size` -> `kernelSize`, `train-data-path` -> `trainDataPath`, etc.) | Must rename *all* attribute names accordingly. |
+| **`branch` body**: removed `'type' REFERENCE type=BranchType` | ** MUST DELETE** the `type -> residual` line - no longer valid in Grammar 2. |
+| **`BranchBody` key renamed**: `'operation'` -> `'eltwiseOperation'` | Rename `operation` -> `eltwiseOperation`. |
+| **`LayerName` terminal**: `'final-layer'` -> `'finalLayer'` | Replace `'final-layer'` with `'finalLayer'`. |
+| **No other additions** (Grammar 2 adds nothing new required or optional that we should instantiate, per your rule #2) | Do *not* add any new attributes. |
+| **All optional fields remain optional and unchanged in presence/absence** (except naming) | Keep omitted `trainDataPath`, `valDataPath`, `seed`, etc. as-is. |
+| **Formatting preserved exactly** (whitespace, indentation, line breaks, tabs, comments) | Preserve Instance 1's layout 1:1 - except where syntax change forces reformatting (e.g., renaming keys). |
+
+---
+
+###  Transformation Steps Applied to Instance 1
+
+1. **Field names in `Network` block** (camelCase):
+   - `epochs`, `batchSize`, `imageSize`, `imageChannels`, `outputLabels`  
+     (already camelCase or unchanged - but note: Grammar 2 uses `imageSize`, `batchSize`, etc., as keys, *not* `batch-size`, `image-size` - so change `batch-size` -> `batchSize`, etc.)
+   - `caffePath` (renamed & kept; optional, but present in Instance 1 -> retain)
+   - `outputPath` (renamed; was `output-path`)
+2. **`caffe-path = "$CAFFE_HOME"`** -> **`caffePath = "$CAFFE_HOME"`**
+3. **Layer attributes**:
+   - `kernel-size` -> `kernelSize`
+   - `use-bias-term` -> `useBiasTerm`
+   - `use-global-stats` -> `useGlobalStats`
+4. **Branch body**:
+   - Remove `type -> residual` entirely (rule deleted in Grammar 2)
+   - Rename `operation` -> `eltwiseOperation`
+5. **`final-layer`** -> `finalLayer`
+6. **Whitespace & formatting preserved exactly** - including indentation, tabs, blank lines, line breaks, `#`-style comments (none here), alignment spacing.
+
+>  No new optional rules introduced - we do *not* add `seed`, `trainDataPath`, etc.
+
+---
+
+###  Final Evolved Instance (Instance 2 - Grammar 2 Compliant)
+
+```xtext
+network "DemoNet" {
+	epochs = 10
+	batchSize = 50
+	imageSize = 28
+    imageChannels = 1
+    outputLabels = 10
+
+    caffePath = "$CAFFE_HOME"
+    outputPath = "/media/xpitfire/data/temp"
+
+	updater -> sgd
+	learningRate = 0.003
+
+	conv   (name: "c1" in:data out:64)     { kernelSize = 6 }
+    conv   (name: "c2" 		   out:32)     { kernelSize = 3 }
+	conv   (name: "c3"         out:32)     { kernelSize = 1 }
+
+	branch (name: "b1" in:"c3" out:32)     {
+		eltwiseOperation -> PROD
+
+		conv (name: "bc1"      out:32)     { kernelSize = 1 }
+		norm (name: "bn1")				   { useGlobalStats = true }
+		scale(name: "bs1") 				   { useBiasTerm = true }
+	}
+
+	pool   (name: "p1"         out:3)      { type -> MAX, stride = 1 }
+
+	dense [(name: "d1"         out:512), 
+	       (name: "d2"         out:256)]
+
+	dense  (name: finalLayer  out:labels)
+}
+```
+
+---
+
+###  Verification Checklist
+| Requirement | Status |
+|-------------|--------|
+| All mandatory keywords (e.g., `'network'`, `'{'`, `'}'`, layer type keywords) retained |  |
+| No new optional attributes added (e.g., no `seed`, no `trainDataPath`) |  |
+| Deleted `type -> residual` (no `BranchType` in Grammar 2) |  |
+| Renamed all keys: `-` -> camelCase, `global-stats` -> `GlobalStats`, etc. |  |
+| `final-layer` -> `finalLayer` |  |
+| Formatting (whitespace, indentation, tabs, line breaks) preserved exactly |  |
+| Branch body now only has `eltwiseOperation -> PROD` |  |
+
+This is **Instance 2**, fully aligned with **Grammar 2** and faithful to the original semantics. Let me know if you'd like the instance validated against Grammar 2 syntax or converted to JSON/AST format next.

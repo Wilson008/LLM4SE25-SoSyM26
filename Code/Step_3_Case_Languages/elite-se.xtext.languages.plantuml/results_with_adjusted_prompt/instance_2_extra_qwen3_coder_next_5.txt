@@ -1,0 +1,182 @@
+Understood. I will carefully evolve **Instance 1** (which conforms to **Grammar 1**) into **Instance 2**, which conforms to **Grammar 2**, while respecting all your constraints:
+
+-  Preserve all literal characters, including quotes, escapes, spaces, comments, formatting.
+-  Do **not** add new optional/branching features (only use what Grammar 2 *explicitly* supports or reuses unchanged).
+-  Remove or replace elements tied to ** Grammar 1 rules that were deleted or semantically restructured in Grammar 2**.
+
+---
+
+###  Key Grammar 1 -> Grammar 2 Changes Relevant to Instance 1
+
+| Grammar 1 Rule | Status in Grammar 2 | Action Required for Instance |
+|----------------|---------------------|------------------------------|
+| `SQ_EncompassBegin` + `SQ_EncompassEnd` (two rules) |  **Deleted**<br> Replaced by single `SQ_Encompass` |  Combine `box ... end box` into *one* element - but *instance already uses `box ... end box` as contiguous text* - so **no change needed** - syntax is compatible. |
+| `SQ_Skinparam` with `colorval/numberval/idval/strval` alternatives |  Deleted<br> Replaced by `value=SQ_SkinparamValue`, where `SQ_SkinparamValue: SQ_Color \| INT \| ID \| STRING` |  `skinparam roundcorner 25` -> still valid (25 = `INT`). |
+| `SQ_Delay: '...' (wait=PT_Wait)? description=SQ_Description '...'`<br>*(trailing `...` optional)* |  **Modified**<br>`'...' (wait=PT_Wait)? description=SQ_Description`<br>(trailing `...` removed) |  Change `"... wait(10 s) Auf schnes Wetter ;) ..."` -> `"... wait(10 s) Auf schnes Wetter ;)"`<br>(remove trailing `...`) |
+| `SQ_Space`: grammar had `height=INT '|' '|'` |  Still present - unchanged structure (only internal alt shift; no impact on `||100||`) |  Keep as-is. |
+| `SQ_Description`: `HEXCOLOR` and `NAMEDCOLOR` added, `COLOR` removed |  `COLOR` terminal removed<br> Replaced by `SQ_Color: color=HEXCOLOR \| NAMEDCOLOR`<br>But `SQ_Description` now allows `HEXCOLOR` and `NAMEDCOLOR` directly as tokens (no `COLOR` terminal). |  `#eeaaaa`, `#aF7`, `#8877cc`, `#0000aa`, `#ffaaaa`, `#eba` -> still valid `HEXCOLOR` or `NAMEDCOLOR` (short form `#aF7` is 3-digit -> `HEXCOLOR` in Grammar 2 still supports it - see terminal definition).<br> No change needed - terminals unchanged *except name*. |
+| `PT_ParameterMap`: grammar 1 used `[]`, grammar 2 uses `{}` |  **Changed**<br>Grammar 1: `('[' ... ']')`<br>Grammar 2: `('{' ... '}')` |  Change all `[location : "dingolfing"]` -> `{location : "dingolfing"}`<br>Also: `response(200\|\|201, [ event: "42" ])` -> `response(200\|\|201, { event: "42" })` |
+| `PT_Parameter`: grammar 1 allowed `name=ID ':' value=STRING` only<br>Grammar 2 allows `name=ID (':' value=PT_ParameterValue)?` -> value *optional* |  Not applicable here - all parameters have values. |
+| `SQ_Arrow`: `color=SQ_Color` instead of `color=COLOR` |  Semantically same (terminals `HEXCOLOR`, `NAMEDCOLOR` still used) |  No change - syntax identical (e.g., `-[#0000aa]->`). |
+
+ Also note:
+- `SQ_HideFootbox` and `SQ_Skinparam` remain.
+- `SQ_Participant` color now uses `SQ_Color` - but `#aF7`, `#8877cc`, etc. are still lexically valid (`HEXCOLOR` supports 3- or 6-digit).
+
+---
+
+###  Step-by-Step Instance 1 -> Instance 2 Edits
+
+| Line(s) | Original (Grammar 1) | Edited (Grammar 2) | Reason |
+|--------|----------------------|--------------------|--------|
+| `... wait(10 s) Auf schnes Wetter ;) ...` | `... wait(10 s) Auf schnes Wetter ;) ...` | `... wait(10 s) Auf schnes Wetter ;)` | Trailing `...` removed per `SQ_Delay` change |
+| `[location : "dingolfing"]` | `request(..., [location : "dingolfing"])` | `request(..., {location : "dingolfing"})` | `PT_ParameterMap` now uses `{}` |
+| `[ event: "42" ]` | `response(..., [ event: "42" ])` | `{ event: "42" }` | Same reason |
+
+ Note: The **arrow `[-->`** in  
+`[--> Alice : Externer Trigger`  
+was *questionable* in Grammar 1 (possibly ambiguous), and in Grammar 2, `SQ_Arrow` still allows `lefttip=SQ_ArrowLeftTip`, and `lefttip` can be `<` or `>` - but crucially, Grammar 2 **does not change** the arrow parsing for this case.  
+However, `[-->` is still **not explicitly supported** in either grammar as a *color before arrow tip* - `[...]` is only allowed *inside* lines, e.g., `-[#fff]->`, not before the arrow.
+
+But:  
+In Instance 1, `[-->` appears to be *intended* as shorthand for `--->` (a dashed arrow), with `[` being a typo or misinterpretation.  
+Let's verify:
+
+Grammar 1 `SQ_ArrowLeftTip` includes:  
+`'<' '<'?` - so `<<` or `<`.  
+But `[` is **not** part of `SQ_ArrowLeftTip`.  
+-> So `[-->` is **not valid** in *either* grammar - it likely was meant to be `<--`.  
+But per your instructions:  
+>  *"Do not omit any mandatory elements, such as characters enclosed by single quotes"*  
+and  
+> *"Do not miss or add any auxiliary information"*  
+
+-> So if the original instance had `[-->`, and it's *not* in quotes, and we're *evolving* the instance (not fixing syntax), we must preserve it *only if* Grammar 2 accepts it.
+
+Wait: Does Grammar 2 allow `[` as a literal token in `SQ_Description`?  
+Yes! `SQ_Description` includes `'['` in its token list.  
+But in `SQ_Message`, `[` appears only in the *first alternative*:  
+`('[' arrow=SQ_Arrow receiver=SQ_Participant)`  
+Here, the `[` is parsed as a literal *before* the arrow - it's *not* part of `SQ_Arrow`, but part of the message syntax.
+
+So `[--> Alice` -> `[` + `arrow=SQ_Arrow` + `receiver`.  
+But `SQ_Arrow` in Grammar 2 still allows `lefttip=SQ_ArrowLeftTip`, and `SQ_ArrowLeftTip` = `'<' '<'? | '\\' '\\' '?' | '/' '/'?`.  
+-> `[` is **not** part of `SQ_ArrowLeftTip` in *either* grammar.
+
+So `[-->` is **invalid in both grammars**, unless `[` is being misused for `<`.
+
+Given that the instance is *original* (Grammar 1), and in Grammar 1, `[-->` is *also* not supported (Grammar 1 `SQ_ArrowLeftTip` doesn't include `[`), this must be a typo.
+
+But per your instructions - **do not fix invalid input, only adapt to grammar changes**.
+
+However - look closely:  
+> *"When evolving the instance, please do not omit any mandatory elements, such as characters enclosed by single quotes"*  
+This implies that **literal text** (even if syntactically questionable) must be preserved *unless* the grammar rule it depended on is deleted.
+
+-> Since `[-->` was accepted (or at least attempted) in Grammar 1 *only if* it was interpreted as a malformed message, and in Grammar 2, the `SQ_Arrow` structure didn't change the fact that `[` is *not* in `SQ_ArrowLeftTip` - **Grammar 2 still does NOT support `[-->`**.
+
+So we have two options:
+1. Keep it unchanged - if grammar can't parse it, it's a syntax error - but your task is *instance evolution*, not error correction.
+2. Realize that `[` was likely intended as `<`, and since your instructions say **"do not omit any mandatory elements"**, and `<` is *required* in valid grammar, whereas `[` is *not*, but in the original instance it's written as `[`, we must preserve it.
+
+But: Your instruction 5 says:  
+> *"Always output your best attempt at the evolved instance, even if incomplete."*  
+
+So - preserving the *exact literal string* `[-->` is safe *only if* Grammar 2 doesn't require it to change.
+
+ Conclusion: `[-->` remains **unchanged**, because:
+- It's not wrapped in quotes -> not "mandatory characters enclosed by single quotes" (per instruction 1).
+- The grammar rules for `SQ_Message` and `SQ_Arrow` *did not change in a way that forces replacement of `[` with `<` or `]`*.
+- Grammar 2 still has `SQ_ArrowLeftTip`, which doesn't accept `[`, but the instance is *input text*, not a parse tree - we're *reproducing* it, not parsing.
+
+However - wait:  
+Grammar 2 `SQ_Description` includes `'['` explicitly, and `SQ_Arrow` still expects `lefttip=SQ_ArrowLeftTip`, so `[-->` will likely cause a syntax error - but again, the task is **instance evolution**, not validation.
+
+ So the *only* required changes are:
+1. Replace `[...]` in parameter maps with `{...}` (because `PT_ParameterMap` changed terminal-wise).
+2. Remove trailing `...` in `SQ_Delay`.
+
+All other elements - including `-[#0000aa]->`, `-[#ffaaaa]>x`, `--`, `box ... end box`, `||100||`, comments, newlines - remain *identical*.
+
+---
+
+###  Final: Instance 2 (Grammar 2-Compliant Evolution)
+
+```plantuml
+@startuml
+
+' Configuration
+header All Features PUML Diagram
+footer Seite %page%/%lastpage%
+skinparam roundcorner 25
+title TITEL =)
+hide footbox
+
+actor "Alice" << (O, #eeaaaa) >> #aF7
+
+autonumber 3 2
+[--> Alice : Externer Trigger
+activate Alice
+
+participant "Multiline\nBob" as Bob
+
+autoactivate on
+Alice -> Bob : start()
+
+== Initialization ==
+
+/'
+Multiline comment:
+Syntax bellow yields a 100 pixel high spacing :)
+'/
+||100||
+
+box "Cloud Services" #8877cc
+create control "CCC-Mock"
+Bob o-> "CCC-Mock" ++: request(POST, "/event/${location}", {location : "dingolfing"})
+... wait(10 s) Auf schnes Wetter ;)
+end box
+return response(200||201, { event: "42" })
+
+"CCC-Mock" -> "CCC-Mock" : bootSkynet()
+
+== Hier wirds kritisch ==
+
+Bob<-[#0000aa]->Alice : Comunicacin muy importante
+
+ref over Alice, Bob: Hier hngt ein ref Kasten\nmit mehreren Zeilen Text\n
+
+== Schicksalskram ==
+
+alt robot takeover
+  Alice -[#ffaaaa]>x "CCC-Mock" !! : Sie wurden soeben terminiert
+  destroy "CCC-Mock"
+  note left of Alice #eba : Alice ist groer Fan\nder Terminator Filmreihe ;)
+else peacful
+  loop 100 times
+    Alice -> "CCC-Mock" : request(POST, "/gift")
+    "CCC-Mock" -> Alice : Thank you =)
+  end
+end
+
+[<-- Alice : Result 
+
+@enduml
+```
+
+---
+
+###  Summary of Edits Applied
+
+| Line(s) | Change | Reason |
+|--------|--------|--------|
+| `... wait(10 s) Auf schnes Wetter ;) ...` -> `... wait(10 s) Auf schnes Wetter ;)` | Removed trailing `...` | `SQ_Delay` in Grammar 2 drops optional trailing `...` |
+| `[location : "dingolfing"]` -> `{location : "dingolfing"}` | Brackets -> braces | `PT_ParameterMap` now uses `{}` |
+| `[ event: "42" ]` -> `{ event: "42" }` | Same reason | |
+
+ All comments, line breaks, escaped `\n`, `||100||`, participant definitions, `actor` stereotyping, `box ... end box`, `skinparam`, `autonumber`, `ref`, notes - preserved **exactly**.
+
+ `[-->` retained unchanged (no grammar rule change mandated substitution).  
+ No optional grammar 2 features (e.g., `NAMEDCOLOR`, `ID` parameters) added.
+
+This is the **best-possible evolution** of Instance 1 under Grammar 2, adhering strictly to your constraints.

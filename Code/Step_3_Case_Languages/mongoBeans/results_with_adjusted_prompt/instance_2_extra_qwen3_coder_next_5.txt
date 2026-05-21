@@ -1,0 +1,115 @@
+Let's carefully analyze the differences between **Grammar 1** and **Grammar 2**, and apply them to **Instance 1** to produce a valid **Instance 2** under **Grammar 2**, respecting all constraints.
+
+---
+
+###  **Relevant Difference Recap (from prior analysis)**
+
+| Aspect | Grammar 1 | Grammar 2 | Impact on Instance |
+|-------|-----------|-----------|--------------------|
+| `MongoBean` rule | `mongobean name=ValidID '{' ... '}'` | `name=ValidID '{' ... '}'` |  The keyword `mongobean` is **removed** from the grammar |
+| `MongoProperty` type | `type=JvmTypeReference` only | `(type=JvmTypeReference \| inlineType=MongoBean)` |  Still accepts `JvmTypeReference` -> **no change required** for existing properties |
+| `PackageDeclaration` | unchanged | unchanged | - |
+| `Import`, `AbstractElement`, `AbstractFeature`, `MongoOperation` | unchanged | unchanged | - |
+
+ **Conclusion**: The *only* structural change affecting Instance 1 is that **`mongobean` is no longer a keyword** - it's now just `name=ValidID '{' ... '}'`. So all occurrences of the literal string `mongobean` must be removed.
+
+No grammar rules were *deleted* beyond this syntactic simplification (i.e., no unrelated rule removals).  
+No new optional features (e.g., inline `MongoBean` as type) were *required* to be used - and per your instructions, we **do not instantiate optional/alternative features unless necessary**.
+
+Also:  
+- Comments, whitespace, indentation, and formatting **must be preserved exactly**.  
+- We must **not omit** any structural tokens (e.g., `{`, `}`, `*`, `(`, `)`).  
+
+---
+
+###  **Apply to Instance 1**
+
+Original Instance 1 (Grammar 1-compliant) begins:
+```
+mongobean Artist {
+```
+
+Grammar 2 now expects:
+```
+Artist {
+```
+(i.e., just the `ValidID`, no `mongobean` prefix)
+
+The same applies to all other `mongobean` declarations: `Album`, `Track`, `Duration`.
+
+**Important**: Only the keyword `mongobean` is removed - the `mongobean` rule itself still represents the same construct (a top-level bean). There is no renaming - just removal of the keyword. So we *delete the literal string* `mongobean ` (including trailing space) before each bean name.
+
+Let's process the entire instance:
+
+####  Step-by-step transformation:
+
+1. Replace all `mongobean ` (note trailing space) with **nothing**
+2. Keep all `package`, `import`, `{`, `}`, comments, whitespace, and indentation unchanged
+3. Do not change `*` on properties, operations, or anything else
+
+---
+
+###  **Result: Instance 2 (Grammar 2-compliant)**
+
+```
+import java.util.*
+
+package org.musicdb {
+	/**
+	 * A musical performer
+	 */
+	Artist {
+		String name
+		Album* albums
+		
+		Iterable<Track> getOevre() {
+			albums.map[tracks].flatten
+		}
+	}  
+	 
+	/**
+	 * A record, CD, DVD or another collection of tracks
+	 */
+	Album {
+		String title
+		int year 
+		Track* tracks
+		
+		Duration getDuration() {
+			tracks.map[duration].reduce[Duration a, Duration b| a + b]
+		}
+	}
+	
+	Track {
+		String title
+		Duration duration
+	}
+	
+	Duration {
+		int seconds
+	
+		void fromString(String duration) {
+			val split = duration.split(':')
+			seconds = Integer::parseInt(split.get(0)) * 60 + Integer::parseInt(split.get(1))
+		}		
+		
+		String toString() {
+			Integer::toString(seconds / 60) + ':' + Integer::toString(seconds % 60)
+		}
+		
+		Duration operator_plus(Duration other) {
+			new Duration() [
+				seconds = this.seconds + other.seconds
+			]
+		}
+	}
+}
+```
+
+ This instance:
+- Has **no `mongobean` keyword** - now valid under Grammar 2's `MongoBean: name=ValidID '{' ... '}'`
+- Preserves **all original comments**, whitespace, indentation, empty lines, and structural syntax
+- Contains **no new features** (e.g., no inline `MongoBean` type usage), as instructed
+- Omits nothing mandatory - all `{`, `}`, `*`, `(`, `)`, etc. intact
+
+Let me know if you'd like further refinement or validation against Grammar 2!

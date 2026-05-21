@@ -1,0 +1,132 @@
+Understood - I'll carefully evolve **Instance 1** (which conforms to **Grammar 1**) into **Instance 2** (which conforms to **Grammar 2**), based on the detailed differences we identified.
+
+Let's recap the *critical changes* from **Grammar 1 -> Grammar 2**, especially those affecting the *instance syntax*:
+
+---
+
+###  Summary of Grammar Changes Affecting Instance Syntax
+
+| Change | Impact on Instance | Action Required in Instance 2 |
+|-------|--------------------|-------------------------------|
+| **1. `Declaration` abstraction introduced**<br>`InterfaceOrClassDeclaration` now wrapped in `Declaration` rule with optional `docComment`. | In Grammar 1, `InterfaceDeclaration` appeared directly inside `ModuleBody`. In Grammar 2, it must appear *inside* `Declaration`, which *requires* an optional `docComment` before it - **but only if present**. Since Grammar 1 instance has *no* doc comments, and `docComment` is optional in Grammar 2, **we can omit it** (per rule #2: do *not* add optional/alternative elements not present in original). |  No change needed to declaration *positioning* - `interface X { ... }` still valid *inside* a `Declaration`. But note: `Declaration` is syntactic sugar: `Declaration: docComment? declaration=InterfaceOrClassDeclaration;`, and `InterfaceOrClassDeclaration` now directly owns `objectType=ObjectType`. |
+| **2. `InterfaceDeclaration` & `ClassDeclaration` simplified**<br>In Grammar 1: `InterfaceDeclaration` had `extendClause` and `objectType`. In Grammar 2: `InterfaceDeclaration` has only `name` + `extendClause?`, and `objectType` is now part of `InterfaceOrClassDeclaration` (a *parent rule*). |  **No syntactic change**: `interface X { s: string }` is still valid - Grammar 2's `ObjectType` is defined identically. |
+| **3. `ImportDeclaration` unchanged syntactically** |  `import Y = A;` stays exactly as-is. |
+| **4. `ModuleDeclaration` unchanged syntactically** - only added optional `docComment?` |  Original modules have no doc comment, so no change needed. |
+| **5. Comments preserved** |  All comments (`/* ... */`) stay *exactly* as in Instance 1 (Grammar 2 does *not* remove or alter comment handling - `ML_COMMENT` still supported). |
+| **6. `ModuleElement` in Grammar 2 uses `Declaration` instead of direct `InterfaceDeclaration`/`ClassDeclaration`**<br>Recall Grammar 1: `moduleContent=( ClassDeclaration | InterfaceDeclaration | ... )`<br>Grammar 2: `moduleContent=( Declaration | ModuleDeclaration | ImportDeclaration )` |  **This is critical**: In Grammar 2, a `ModuleElement` cannot directly contain `InterfaceDeclaration`; it must contain a `Declaration`. And `Declaration` *starts with* `docComment?`, then `declaration=InterfaceOrClassDeclaration`. But crucially - `InterfaceOrClassDeclaration` is **not a separate token** in the text - it's a hidden wrapper in the AST. *Syntactically*, `interface X { ... }` still appears *as-is* - because `Declaration` is defined as `docComment? declaration=InterfaceOrClassDeclaration`, and `InterfaceOrClassDeclaration` itself is `(InterfaceDeclaration | ClassDeclaration) objectType=ObjectType`. So the *surface syntax* is unchanged.* |
+
+ **Crucial realization**:  
+> **There is *no surface syntax change* required** for Instance 1 to be valid under Grammar 2 - because:
+- All rules (`module`, `interface`, `import`, `export`, `{ ... }`) remain syntactically identical.
+- The internal refactoring (e.g., `Declaration`, `InterfaceOrClassDeclaration`) is *AST-level* - not visible in text.
+- `docComment` is optional -> omit it where absent.
+- No deleted rules (e.g., no `VariableDeclaration`, `FunctionDeclaration`, etc. were in Instance 1, so nothing to remove).
+
+Let's verify with Grammar 2's rules:
+
+```xtext
+ModuleElement: 
+     exported?="export"? moduleContent=( Declaration | ModuleDeclaration | ImportDeclaration ) ';'? ;
+```
+
+So for:
+```
+export interface X { s: string }
+```
+
+It parses as:
+- `exported? = true`
+- `moduleContent = Declaration` (via `Declaration -> InterfaceOrClassDeclaration -> InterfaceDeclaration { ... }`)
+- `';'?` is optional - absent (OK).
+
+Same for:
+```
+import Y = A;
+```
+-> `moduleContent = ImportDeclaration`
+
+No changes needed to the text.
+
+But wait - earlier we noted in Grammar 1, `ImportDeclaration` used `QualifiedName`, and `TypeReference` pointed to `[InterfaceDeclaration|QualifiedName]`.  
+In Grammar 2, `TypeReference.reference = [InterfaceOrClassDeclaration|QualifiedName]` - but **`interface X` is still a valid target for `TypeReference`**, and in `import Y = A;`, `A` is resolved as an `Identifier`, and then the scoping should bind it to the module `A` (or interface `X`). In practice, the text `A` is unchanged.
+
+ **Conclusion**:  
+ **Instance 1 is *already syntactically valid* under Grammar 2** - no modification needed.
+
+But let's double-check against *explicit* rule changes:
+
+- **Grammar 1** allowed: `interfacesAndClasses += (InterfaceDeclaration | ClassDeclaration | ModuleDeclaration )*;`  
+- **Grammar 2** uses: `InterfacesAndClasses: (modules+=ModuleDeclaration | types+=Declaration)*;`  
+-> Since `ModuleDeclaration` remains, and `Declaration` subsumes `InterfaceDeclaration`, the top-level layout is *logically* the same - just cleaner.
+
+And crucially:  
+- Instance 1 contains:
+  ```ts
+  module A { 
+    export interface X { s: string } 
+  }
+  ```
+  -> In Grammar 2, inside `ModuleBody.elements+=ModuleElement*`, each `ModuleElement` has `moduleContent=(Declaration | ...)`, and `Declaration` is defined as:
+  ```xtext
+  Declaration: docComment=DocComment? declaration=InterfaceOrClassDeclaration;
+  InterfaceOrClassDeclaration: (InterfaceDeclaration | ClassDeclaration) objectType=ObjectType;
+  ```
+  So `export interface X { s: string }` maps to:
+  - `exported? = true`
+  - `moduleContent = Declaration { declaration = InterfaceDeclaration { ... } objectType = { s: string } }`
+
+ Perfectly valid.
+
+---
+
+###  Final Decision:  
+**Instance 2 = Instance 1**, unchanged.
+
+BUT - per your rules:
+> 5. Always output your best attempt at the evolved instance, even if incomplete. Never return an empty result.
+
+And:
+> 3. Do not miss or add any auxiliary information in the instance, e.g., comments, formats (white space, indents, tabs, empty lines, etc.)
+
+Since Grammar 2 introduces `DocComment` support *but doesn't require it*, and Instance 1 has *no* doc comments, we preserve the exact original.
+
+However - one subtle point:  
+Grammar 2 adds `docComment` to:
+- `ModuleDeclaration` (optional)
+- `Declaration` (optional)
+- `TypeMember` (optional)
+
+-> All optional. So no change.
+
+Therefore:
+
+---
+
+###  **Instance 2** (valid under Grammar 2):
+
+```
+module A { 
+ export interface X { s: string } 
+} 
+ 
+module B { 
+ /*var A = 1; */ 
+ import Y = A; 
+}
+```
+
+Identical to Instance 1 - including:
+- Blank line between modules
+- Single space after `export`
+- Spaces inside `{ ... }`
+- Comment `/*var A = 1; */` preserved verbatim
+- Semicolon after `import Y = A;` (optional in both grammars, present in instance - kept)
+
+ No mandatory elements omitted.  
+ No optional/alternative features added.  
+ No deleted rules instantiated.  
+ Format and whitespace preserved exactly.
+
+Let me know if you'd like a version *without* the trailing semicolon (if Grammar 2 makes it strictly optional and Instance 1 optionally has it), but in this case - **keep it as-is**.
+
+Would you like me to verify parsing against Grammar 2 manually, or generate a minimal AST outline?

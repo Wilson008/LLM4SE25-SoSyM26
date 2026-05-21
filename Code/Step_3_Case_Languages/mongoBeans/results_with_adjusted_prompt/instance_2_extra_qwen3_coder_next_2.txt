@@ -1,0 +1,86 @@
+Understood. Let's proceed step by step.
+
+###  Recap of Key Grammar Differences (Grammar 1 -> Grammar 2)
+
+| Grammar Change | Impact on Instance |
+|----------------|--------------------|
+| **`MongoBean` rule changed**:<br>Grammar 1: `mongobean` name=ValidID `{ ... }`<br>Grammar 2: `name=ValidID '{' ... }` | **Remove `mongobean` keyword** - all `mongobean` -> just `Name { ... }` |
+| `MongoProperty` now allows `inlineType=MongoBean` |  We **do not use** this in Instance 1 - all properties use `JvmTypeReference` -> no change needed |
+| All other rules (`Import`, `PackageDeclaration`, `AbstractFeature`, `MongoOperation`, `QualifiedNameWithWildcard`) unchanged |  No modification required for these |
+
+###  Constraints Applied per Your Instructions:
+1. **No omitted mandatory tokens** (e.g., quotes, braces, keywords)  
+2. **No new features from Grammar 2 added** (e.g., no inline beans unless already present - they aren't)  
+3. **Preserve all auxiliary info**: comments, blank lines, indentation, whitespace, line breaks  
+4. **Remove `mongobean` keyword only** - this is the *deleted grammar rule* in Grammar 2  
+
+---
+
+###  Evolved Instance 2 (Grammar 2-Compliant)
+
+```xtext
+import java.util.*
+
+package org.musicdb {
+	/**
+	 * A musical performer
+	 */
+	Artist {
+		String name
+		Album* albums
+		
+		Iterable<Track> getOevre() {
+			albums.map[tracks].flatten
+		}
+	}  
+	 
+	/**
+	 * A record, CD, DVD or another collection of tracks
+	 */
+	Album {
+		String title
+		int year 
+		Track* tracks
+		
+		Duration getDuration() {
+			tracks.map[duration].reduce[Duration a, Duration b| a + b]
+		}
+	}
+	
+	Track {
+		String title
+		Duration duration
+	}
+	
+	Duration {
+		int seconds
+	
+		void fromString(String duration) {
+			val split = duration.split(':')
+			seconds = Integer::parseInt(split.get(0)) * 60 + Integer::parseInt(split.get(1))
+		}		
+		
+		String toString() {
+			Integer::toString(seconds / 60) + ':' + Integer::toString(seconds % 60)
+		}
+		
+		Duration operator_plus(Duration other) {
+			new Duration() [
+				seconds = this.seconds + other.seconds
+			]
+		}
+	}
+}
+```
+
+---
+
+###  Verification:
+- All `mongobean` keywords removed -> now `Artist {`, `Album {`, etc.
+- All comments preserved (including `/** ... */` javadoc-style)
+- All blank lines, indentation (2 spaces + 1 tab for inner blocks), spacing preserved exactly
+- No inline `MongoBean`s added/modified (none existed in Instance 1)
+- All method signatures and Xbase expressions unchanged
+- Package and import structure intact
+
+This is the faithful evolution of **Instance 1** into an instance valid under **Grammar 2**.

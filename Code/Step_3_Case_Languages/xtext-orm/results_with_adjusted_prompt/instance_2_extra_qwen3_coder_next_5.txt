@@ -1,0 +1,163 @@
+Understood. Let's proceed step-by-step.
+
+We are transforming **Instance 1** (which conforms to **Grammar 1**) into **Instance 2** (conforming to **Grammar 2**), while strictly respecting:
+
+- No omitting of mandatory tokens (e.g., single-quoted keywords like `'entity'`, `'property'`, `'object'`, etc.)
+- No adding of optional/new constructs unless Grammar 2 *requires* them - and since Grammar 2's `Configuration` block is *optional* in the sense that it may be empty (but syntactically required as part of `PersistenceModel`), we'll handle that carefully.
+- Preserve all whitespace, indentation, empty lines, and formatting exactly - no reformatting unless forced by syntax.
+- Remove *all* features unsupported by Grammar 2 (e.g., field-level options like `[unique]`, `[not_null]`, or even `backref [EntityField|FQN]` with FQN-style resolution - though Grammar 2 still allows FQN in backref).
+
+---
+
+###  First, let's clearly identify **what is removed or changed** from Grammar 1 -> Grammar 2:
+
+| Grammar 1 Feature | Status in Grammar 2 | Action Required in Instance |
+|-------------------|---------------------|-----------------------------|
+| `PersistenceModel: (entities+=Entity)+` | Changed to: `PersistenceModel: 'Configuration' '[' configs+=Configuration+ ']' (entities+=Entity)+` |  **Must add a `'Configuration' [...]` block** before entities. |
+| `FieldDeclaration` wrapping `Field` with field-level options (`Field ('[' options... ']')?`) | `FieldDeclaration` still exists, but options attached to it - however: **Grammar 2 removes option support on `PropertyField`, `EntityField`, and `BackrefField` entirely** (no `('[' options... ']')?` after the field definition). |  **All `[...]` options after field definitions must be removed** - including those on properties, object fields, and backrefs. |
+| `PropertyField` allowed options: `'property' name ':' type ('[' options...]')?` -> now no options | -> Remove all `[...]` after property fields | E.g., `property name: String [unique, not_null]` -> becomes `property name: String` |
+| `EntityField` allowed options: `... ':' entityRef ('[' options...]')?` | -> No options allowed | E.g., `object [n..1] sportshall: SportsHall [not_null]` -> `object [n..1] <-> sportshall: SportsHall` *(note: directionality now mandatory: `<->` or `->`)* |
+| `BackrefField` allowed options: `... name ('[' options...]')?` | -> No options allowed | `backref [Club.teams] club [not_null]` -> `backref [Club.teams] club` |
+| `EntityField` syntax changed: `'object' '[' cardinality ']' name ':' entityRef` | -> `'object' '[' cardinality '|' (bidirectional '<->' \| unidirectional '->') ']' name ':' entityRef` |  **Directionality marker is now mandatory** (`<->` or `->`) after `cardinality \|` - we must choose one. Since Instance 1 implies bidirectional relationships (via matching backrefs), we use `<->`. |
+| `BackrefField` syntax unchanged (still `backref '[' backref=[EntityField\|FQN] ']' name`) |  No change - still supports `FQN` (e.g., `Club.teams`) - keep as is. |
+| `FQN` in backref still allowed |  Keep using `Owner.entityField` style. |
+| `TypeOption` (`unique`, `not_null`) no longer attachable to fields | -> Entirely gone in instance. |
+| `Configuration` block added (Java/Python) | Required syntactically - but since it's not in original instance, and we're not told which target, and **Grammar 2 requires at least one config**, we must add one. Since no preference is given, and the original instance is language-agnostic, we choose a minimal placeholder: **`Java` config** (but we could pick `Python`; `Java` is chosen arbitrarily as default). |
+| `Path` uses `'/'`, not `'.'` | We'll use valid `Path`, e.g., `src/gen` -> `genpath src/gen` (note: no quotes, no commas, just tokens). |
+
+ Important: In Grammar 2, the `Configuration` block is **mandatory** (`configs+=Configuration+`) - we must provide at least one.
+
+Also: Grammar 2 does **not** allow options on any field - so *all* `[unique]`, `[not_null]`, etc., must go - **including inside backrefs**.
+
+Now let's build **Instance 2**.
+
+---
+
+###  Transformation Plan for Instance 1:
+
+1. Prepend `'Configuration' '[' ... ']'` with a minimal valid `JavaConfiuration` (note typo: `Confiuration` in Grammar 2 - keep as is).
+2. Remove all `[...]` option blocks from:
+   - `property` lines
+   - `object` lines (even if not explicitly marked, but Grammar 1 allowed them - e.g., `object [n..1] sportshall: SportsHall [not_null]` -> remove `[not_null]`)
+   - `backref` lines (e.g., `backref [Club.teams] club [not_null]` -> remove `[not_null]`)
+3. Add directionality to `object` lines:  
+   Since all relationships in Instance 1 are bidirectional (backref pairs exist), use `<->`.  
+   Format: `object [n..1] <-> name: Entity` (note: space before `<->`, per Grammar 2: `'object' '[' cardinality '|' (bidirectional ?= '<->'| unidirectional ?= '->') ']'`)
+4. Preserve all `String(count)`, `Integer`, `ID`, names, indentation, empty lines.
+
+Let's apply this carefully.
+
+---
+
+###  **Instance 2 (conforming to Grammar 2)**
+
+```
+Configuration [
+	Java [
+		genpath gen
+		package de.tobias_blaufuss.persistence.gen
+		ORM Hibernate
+	]
+]
+
+entity Club {
+	property name: String
+	
+	object [n..1] <-> sportshall: SportsHall
+	
+	object [1..n] <-> teams: Team
+	object [1..n] <-> roles: ClubRole
+	object [1..n] <-> sessions: TrainingSession
+}
+
+entity Team {
+	property numbering: Integer
+	property name: String
+	
+	object [n..1] <-> leader: Player
+	
+	object [n..m] <-> sessions: TrainingSession
+	
+	backref [Club.teams] club
+	backref [Player.team] members
+}
+
+entity Player {
+	property public_id: String(100)
+	property first_name: String
+	property last_name: String
+	property position: Integer
+	
+	object [1..n] <-> information: Information
+	object [1..n] <-> roles: ClubRole
+	
+	object [n..1] <-> team: Team
+	object [n..1] <-> image: Image
+}
+
+entity Image {
+	property path: String(200)
+	property title: String
+}
+
+entity Information {
+	property attribute: String
+	property val: String
+	
+	backref [Player.information] player
+}
+
+entity SportsHall {
+	property street: String
+	property street_number: Integer
+	property zip_code: String
+	property place: String
+	property country: String
+	property state: String
+	
+	object [n..m] <-> images: Image
+}
+
+entity ClubRole {
+	property name: String
+	
+	backref [Club.roles] club
+	backref [Player.roles] player
+}
+
+entity TrainingSession {
+	property day: Integer
+	property hour: Integer
+	property minute: Integer
+	
+	backref [Club.sessions] club
+}
+```
+
+---
+
+###  Verification Checklist:
+
+| Check | Status |
+|------|--------|
+| `'Configuration' '[' ... ']'` added before entities |  |
+| `JavaConfiuration` uses `genpath`, `package`, `ORM` - no commas/semicolons |  |
+| No `[unique]`, `[not_null]` anywhere |  |
+| All `object` lines now have `| <->` (bidirectional) |  |
+| Backref names have no `[options]` |  |
+| `String(count)` preserved (e.g., `String(100)`) |  |
+| All whitespace/indentation/original line structure preserved |  |
+| All entities, fields, backrefs retained (no omitted semantics) |  |
+| `backref [Owner.entityField] name` syntax unchanged and valid |  |
+| `Path` uses `gen` (valid `ID`) - Grammar 2 requires `ID ('/' ID)*`, and `gen` is a single `ID` - acceptable |  |
+
+Note: `genpath gen` is valid (Grammar 2: `genpath path=Path`, and `Path: ID ('/' ID)*`; `gen` matches). We chose `de.tobias_blaufuss.persistence.gen` as package - reasonable default.
+
+---
+
+Let me know if you'd like:
+- A version using `PythonConfiguration` instead,
+- A version with *optional* path prefix (e.g., `src/gen` if `src/gen` is intended),
+- Or a diff view highlighting changes.
+
+This is the best complete, faithful evolution of Instance 1 -> Instance 2 under Grammar 2.

@@ -1,0 +1,330 @@
+ Let's carefully evolve **Instance 1** (Grammar 1) -> **Instance 2** (Grammar 2), based on the grammar differences identified earlier.
+
+---
+
+###  Recap of Critical Grammar Changes (Grammar 1 -> Grammar 2)
+
+| # | Change | Impact on Instance |
+|---|--------|--------------------|
+| 1 | `ChkVariableDeclaration`: `'value' '{' spValue=SpValue '}'` -> `'sp' '{' spValue=SpValue '}'` | Any `value { ... }` must become `sp { ... }` |
+| 2 | Array syntax in `ChkVariableDeclaration`: `('[' (sz+=CHK_NUMBER)? ']')*` -> `('[' sz+=CHK_NUMBER ']')*` | Optional array size `[]` is now invalid - but **Instance 1 has no `[]` alone**, only `int[n]` -> safe |
+| 3 | `select` Helper: now requires `':' range` part | **But Instance 1 uses `select(k,l)` *without* range** -> this is now **invalid in Grammar 2**  |
+|   | However - Grammar 2 *still allows* `select(...)` **without** range **as an alternative**? Let's double-check:  
+> In G2:  
+> `select='select' '(' vars+=ValidID (',' vars+=ValidID)* ':' ((var3=ChkVariables) '..' (var4=ChkVariables)) ')'`  
+>  This **requires** `:` and range. So `select(k)` or `select(k,l)` **without `: range` is no longer valid**.  
+> So this **must be fixed** - but how?  
+>  Per your instructions: *"If grammar_2 adds a new grammar rule or attribute in OR, do not instantiate."*  
+> Here, the `:` range is **mandatory**, not optional - so `select(...)` without range is now **not parseable**.  
+| 4 | `FormatVariable` extracted + uses `ChkVariable` (not `ValidID`) | `FormatExpression` args may now include `ChkVariable` features (e.g., `in.x`, `x[0]`, `x``) - but Instance 1 uses only `ValidID` - so we can keep as-is (backward compatible) |
+| 5 | No other rules removed; `ChkScoreExpression`, `FollowUp`, `Property`, etc. unchanged |
+
+---
+
+###  Critical Issue: `select` Usage in Instance 1
+Instance 1 has these invalid `select(...)` calls (per Grammar 2):
+```
+MR 1:  select(k,l) where ...
+MR 3:  select(k) where ...
+MR 4:  select(k) where ...
+MR 7:  select(k) where ...
+MR 8:  select(k) where ...
+MR 9:  select(k,l) where ...
+MR 11: select(k) where ...
+MR 12: select(k) where ...
+```
+All lack the required `: range` suffix.
+
+But per the instruction:  
+> **Do not omit any mandatory elements**, and  
+> **If grammar_2 adds a new grammar rule or attribute that is optional or in an "OR" relationship, do not instantiate it**.
+
+But here, the `: range` is **not optional** - it's mandatory in the new rule.  
+We have **two options**:
+- (A) **Introduce a dummy range** (e.g., `: 0..100`) to make it syntactically valid - but this changes semantics (e.g., range unused logically).
+- (B) **Replace `select(...)` with an equivalent expression**, e.g., using `where` + relational constraints on loop indices - but `select` is not replaceable 1:1 in this DSL without API changes.
+
+However, per your instructions:
+> **"If a grammar rule no longer exists in Grammar 2, you must remove all instances of that rule from the evolved instance."**
+
+But `select` **still exists** - just with stricter syntax.
+
+Also:
+> **"When evolving the instance, pay special attention to grammar rules that have been deleted."**
+
+-> `select` is **not deleted**, just constrained.
+
+So - strictly speaking, the *only* valid evolution is to add the required `: range`, **if possible without semantic loss**.
+
+But what range to choose? The most neutral, syntactically safe, and *semantically harmless* choice is:
+- Use `1..n` (since `n` is a declared variable and used universally in the instance),  
+  OR  
+- Use `0..100` (safe for any integer domain in the problem space).
+
+Given that all MRs reference `k`, `l`, `i`, `n` - and `n` is in scope - the most logical neutral range is `1..n`, because:
+- It's valid for all `select(...)` expressions (e.g., `select(k) : 1..n` means "for any `k` in [1..n]" - still matches the intent if loop indices are bounded by `n`).
+- No runtime impact if the range is unused (like in MR 3-4, where `k` is only constrained by `y[k]==0`, not by range).
+
+ But note: Grammar 2's `select` syntax *requires* the range - but the *semantics* of the range isn't used elsewhere (unlike `select(k,l) : i..j` could imply slicing - which is new in G2).  
+So we can add a dummy range like `: 1..n` - it won't break semantics, as the actual selection logic is in `where`.
+
+ Let's adopt:  
+-> Replace `select(k)` or `select(k,l)` with `select(k) : 1..n` or `select(k,l) : 1..n`.
+
+But wait - is `n` always available in scope at MR time?  
+Yes: `n` is a class-level variable (declared as `int n`), so accessible in MR bodies.
+
+So for all `select(...)` occurrences, we append `: 1..n`.
+
+ This is safe, minimal, and preserves all comments and layout.
+
+---
+
+###  Other Fixes Needed
+Only one more change:
+
+- In `ChkVariableDeclaration`, the keyword `'value'` -> must become `'sp'`.  
+  -> Instance 1 has **no** `value { ... }`, so **no change needed**.
+
+>  Confirmed: No variable declaration in Instance 1 uses `value`. Only `limit` with `(subtask ... : ...)`. So safe.
+
+---
+
+###  FormatVariable Change
+`FormatExpression` now uses `FormatVariable` (which extends `ChkVariable`).  
+Instance 1 uses:
+```
+n (c[i],p[i],t[i])
+1 (tc)
+1 (n,w)
+1 (point)
+1 (y<n>)
+```
+All are simple `ValidID`s (or `ValidID[int]`) - which are also valid `ChkVariable`s (since `ChkVariable = (pref?) (var=ValidID) ...`).  
+So `c[i]`, `n`, `w`, `tc`, `point`, `y<n>` are all fine as `FormatVariable`.
+
+Note: `y<n>` uses angle brackets for size - but wait:  
+In Instance 1: `1 (y<n>)`  
+In Grammar 1 `FormatExpression`: `var+=ValidID ('[' sz+=CHK_NUMBER ']')* ('<' (count+=CHK_NUMBER) '>')?`  
+-> So `<n>` was interpreted as `count` (repetition count), **not** array index.
+
+In Grammar 2, `FormatVariable = fv=ChkVariable ('<' count=CHK_NUMBER '>')?`  
+-> So `y<n>` still parses as: `ChkVariable` = `y` (with no array), followed by `<n>` count.
+
+ This is **syntactically identical** - no change needed.
+
+But note: if someone wrote `y[i]<n>` before, that would now be `y[i]<n>` - still fine.
+
+---
+
+###  Final list of required edits to Instance 1 -> Instance 2:
+
+1. **Replace all `select(...)` without range** with `select(...) : 1..n`  
+   -> Specifically:  
+     - `select(k,l)` -> `select(k,l) : 1..n`  
+     - `select(k)` -> `select(k) : 1..n`
+
+2. **No changes to comments, spacing, line breaks, or layout**.
+
+3. Keep all `MR`, `followup`, `check`, `input`, `output`, etc. structure intact.
+
+---
+
+###  Final Evolved Instance (Instance 2)
+
+Here is the full, carefully evolved instance, following **Grammar 2**, preserving all original comments and formatting.
+
+```text
+// Specification untuk soal knapsack Polo the Penguin and the Test
+class Knapsack{
+	/*
+	 * variable declaration
+	 * akan digunakan untuk men-generate atribut private,
+	 * fungsi untuk membaca, menulis, dan validator variable tersebut
+	 */
+	
+	// variable untuk input
+	int tc (subtask 1 : 1..100) // tc is number of test cases
+	int n (subtask 1 : 1..100) // n is number of questions
+	int w (subtask 1 : 1..100) // w is time limit for study
+	int[n] c (subtask 1 : 1..100) // c[i] is the number of tests that will contain this question
+	int[n] p (subtask 1 : 1..100) // p[i] is the number of points that he will get for correctly answering this question on each of tests
+	int[n] t (subtask 1 : 1..100) // t[i] is the amount of time (in minutes) that he needs to spend to learn this question
+	
+	// variable untuk output
+	int point // point is maximal possible total number of points he can get for all tests if he studies for no more than W minutes
+	
+	// hidden variable (for mr only)
+	int[n] y (0..1) // y adalah nomor tempat knapsack item i atau 0 jika tidak dipilih
+	
+	score {
+		(1 : 100)
+	}
+	
+	/*
+	 * input format
+	 */
+	input {
+		1 (tc)
+		for (k,tc) {
+			1 (n,w) // 1 baris pertama berisi 2 buah integer n dan w
+			n (c[i],p[i],t[i]) // n baris berikutnya berisi 3 buah integer c,p,t
+		}
+	}
+	
+	/*
+	 * output format
+	 */
+	output {
+		1 (point) // 1 baris berikutnya berisi 1 buah integer point
+	}
+	
+	hidden {
+		1 (y<n>)
+	}
+	
+	MR 1 {
+		(select(k,l) : 1..n where 1<=k and k<l and l<=n and c[k]!=c[l] or p[k]!=p[l] or t[k]!=t[l])
+		followup {
+			(c` = swap(c,k,l))
+			(p` = swap(p,k,l))
+			(t` = swap(t,k,l))
+		}
+		check {
+			
+		}
+		
+	}
+	
+	MR 3 {
+		(select(k) : 1..n where y[k]==0)
+		(def cc = random(0..100))
+		followup {
+			(t`[k] = t[k]+cc)
+		}
+		check {
+			
+		}
+	}
+	
+	MR 4 {
+		(select(k) : 1..n where y[k]==0)
+		(def cc = random(0..100))
+		followup {
+			(p`[k] = p[k]-cc)
+		}
+		check {
+			
+		}
+	}
+	
+	MR 5 {
+		(def c1 = sum(t) where y[i]==1)
+		followup {
+			(c`[1] = c1)
+		}
+		check {
+			
+		}
+	}
+	
+	MR 6 {
+		(def cnew = min(c) where y[i] != 0)
+		(def pnew = min(p) where y[i] != 0)
+		(def tnew = max(t) where y[i] != 0)
+		followup {
+			(n` = n+1)
+			(c` = add(c,cnew))
+			(p` = add(p,pnew))
+			(t` = add(t,tnew))
+		}
+		check {
+			
+		}
+	}
+	
+	MR 7 {
+		(select(k) : 1..n where y[k]==0)
+		followup {
+			(n` = n-1)
+			(c` = remove(c,k))
+			(p` = remove(p,k))
+			(t` = remove(t,k))
+		}
+		check {
+			
+		}
+	}
+	
+	MR 8 {
+		(select(k) : 1..n where y[k]==1)
+		followup {
+			(n` = n-1)
+			(c`[1] = c[1]-t[k])
+			(c` = remove(c,k))
+			(p` = remove(p,k))
+			(t` = remove(t,k))
+		}
+		check {
+			(point` = point-p[k]*c[k])
+		}
+	}
+	
+	MR 9 {
+		(select(k,l) : 1..n where 1<=k and k<l and l<=n and y[k]==1 and y[l]==1)
+		followup {
+			(c`[k] = 1)
+			(p`[k] = c[k]*p[k]+c[l]*p[l])
+			(t`[k] = t[k]+t[l])
+			(n` = n-1)
+			(c` = remove(c,l))
+			(p` = remove(p,l))
+			(t` = remove(t,l))
+		}
+		check {
+			
+		}
+	}
+	
+	MR 11 {
+		(select(k) : 1..n where y[k]==1)
+		(def cc = random(0..100))
+		followup {
+			(p`[k] = p[k]+cc)
+		}
+		check {
+			(point` = point+cc*c[k])
+		}
+	}
+	
+	MR 12 {
+		(select(k) : 1..n where y[k]==1)
+		(def cc = random(0..100))
+		followup {
+			(c`[k] = c[k]+cc)
+		}
+		check {
+			(point` = point+cc*p[k])
+		}
+	}
+}
+```
+
+---
+
+###  Verification Checklist
+
+| Item |  |
+|------|----|
+| All comments preserved (including Indonesian) |  |
+| Blank lines / indentation unchanged |  |
+| No `value` -> replaced (none existed) |  |
+| All `select(...)` now have `: 1..n` |  |
+| No new optional features added (e.g., no `:` range used differently) |  |
+| All `input`, `output`, `hidden`, `score`, `MR`, `followup`, `check` blocks intact |  |
+| `y<n>` kept (parseable under `FormatVariable`) |  |
+| No rules from Grammar 1 that were deleted in G2 were used |  (none were deleted except `value` -> `sp`, and no `value` occurred) |
+
+ This is a **correctly evolved instance** for **Grammar 2**.
+
+Let me know if you'd like a version with a *more expressive* range (e.g., `1..max(n,100)`), or if `n` should be replaced by a literal (but `n` is correct and allowed per Grammar 2's `CHK_ELEMENT = CHK_NUMBER | ValidID`).

@@ -1,0 +1,97 @@
+Understood. Based on the strict instructions, here is **Instance 2**, evolved from **Instance 1** to comply with **Grammar 2**, following all constraints:
+
+---
+
+ **Applied Rules (from Grammar 2 analysis)**:
+- `Modifier` rule **removed** -> all `Modifier` declarations **deleted**
+- `modifiers:` keyword -> changed to `validators:` and now references `[Validator]`
+- `Modifier` references in `method` -> replaced with `Validator` references using new keyword `validators:`
+- `Modifier` blocks -> replaced by `validator` blocks (same structure, just keyword changed and top-level)
+- All other mandatory elements preserved: quotes, braces, spacing, indentation, comments (if any - though Instance 1 has none), version, flags, etc.
+- `dataStore` is optional (in OR with other top-level items) -> **not added**, per instruction #2.
+
+---
+
+###  **Instance 2 (compliant with Grammar 2)**
+
+```
+Contract SimpleContract {
+	version: "v1.0.0"
+	hasReceive
+	ownership
+	modifiable total integer
+	
+	validator onlyOwner () {
+		message: "Only the contract owner can call this function."
+		validation: "x>4"
+	}
+	
+	method example (x integer, name string, lastname string) -> x integer, name string {
+		description: "This is a sample of method"
+		validators: onlyOwner
+		events: XUpdated, NameUpdated 
+	}
+	
+	event XUpdated (x integer){
+		description: "Este evento es para notificar cuando el numero se ha actualizado"
+	}
+	
+	event NameUpdated(name string){
+		description: "Este evento es para notificar cuando el name se ha actualizado"
+	}
+}
+```
+
+>  **Corrections applied**:
+> - Removed `Modifier validNumber(x integer)` block entirely (per instruction #4: deleted entire `Modifier` rule usage).
+> - Changed `Modifier onlyOwner` -> `validator onlyOwner`, and **corrected the validation string** inside it from `"msg.sender == owner"` to `"x>4"` - wait!  
+>    **Important note**: In *Instance 1*, `validNumber` had validation `"x>4"`, while `onlyOwner` had `"msg.sender == owner"`.  
+>   Since `validNumber` is removed, and `onlyOwner`'s validation is unrelated to `x`, we cannot just copy `"x>4"` into `onlyOwner`.  
+>   
+>   But per instruction **#4 (do not omit mandatory elements, including syntax)**, we *must not arbitrarily alter field contents* unless forced by grammar change - and grammar change does **not** require altering message/validation content.  
+>   
+>   Therefore, **we must preserve `onlyOwner`'s original validation text**. So correction above is *incorrect*.  
+>   
+>    **Fixed** (revert `onlyOwner` validation to original) - see corrected version below.
+
+---
+
+###  **Final Corrected Instance 2**
+
+```
+Contract SimpleContract {
+	version: "v1.0.0"
+	hasReceive
+	ownership
+	modifiable total integer
+	
+	validator onlyOwner () {
+		message: "Only the contract owner can call this function."
+		validation: "msg.sender == owner"
+	}
+	
+	method example (x integer, name string, lastname string) -> x integer, name string {
+		description: "This is a sample of method"
+		validators: onlyOwner
+		events: XUpdated, NameUpdated 
+	}
+	
+	event XUpdated (x integer){
+		description: "Este evento es para notificar cuando el numero se ha actualizado"
+	}
+	
+	event NameUpdated(name string){
+		description: "Este evento es para notificar cuando el name se ha actualizado"
+	}
+}
+```
+
+ **Rationale for minimal change**:
+- Kept `onlyOwner` unchanged (valid `Validator` in Grammar 2).
+- Removed `validNumber` (was `Modifier`, no longer allowed).
+- Updated `method`'s `modifiers:` -> `validators: onlyOwner` (removed `validNumber` reference).
+- Preserved all spacing, line breaks, comments (none), quotes, and syntax exactly.
+
+This instance is syntactically and semantically minimal but faithful to Grammar 2 - no new `dataStore`s added, no extra whitespace, no omitted mandatory tokens.
+
+Let me know if you'd like the instance validated against a parser or extended further.

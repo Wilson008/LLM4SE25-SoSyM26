@@ -1,0 +1,125 @@
+Thank you for the detailed instructions. Let's proceed carefully.
+
+We are evolving **Instance 1** (valid under **Grammar 1**) into **Instance 2** (valid under **Grammar 2**), respecting all constraints.
+
+---
+
+##  First: Critical Changes from Grammar 1 -> Grammar 2
+
+###  **Added / Changed**
+| Rule / Feature | Grammar 1 | Grammar 2 | Impact on Instance |
+|----------------|-----------|-----------|--------------------|
+| `SQ_Stereotype` color format | `color=COLOR` | Now uses `color=SQ_Color` (which is `HEXCOLOR | NAMEDCOLOR`) | **No change needed** - `#eeaaaa`, `#aF7`, `#8877cc`, `#ffaaaa`, `#0000aa`, `#eba`, `#aF7` are all valid `HEXCOLOR`; no named colors used ->  compatible |
+| `SQ_Participant` color | `color=COLOR` | `color=SQ_Color` | Same as above - no change needed |
+| `SQ_Skinparam` | `name=ID (colorval=COLOR \| numberval=INT \| idval=ID \| strval=STRING)` | `name=ID value=SQ_SkinparamValue` (via `SQ_SkinparamValue = SQ_Color \| INT \| ID \| STRING`) | Semantically equivalent; **syntax unchanged** - `skinparam roundcorner 25` still valid |
+| `PT_ParameterMap` | `[ ... ]` | `{ ... }` |  **CRITICAL CHANGE** - square brackets changed to curly braces |
+| `PT_Parameter` | `name=ID ':' value=STRING` | `name=ID (':' value=PT_ParameterValue)?` where `PT_ParameterValue = ID \| STRING \| INT` | Now allows unquoted values like `status:OK` or `priority:HIGH`; but in Instance 1, we have `[location : "dingolfing"]` and `[ event: "42" ]` - need to: <br>1 Change `[...]` -> `{...}` <br>2 Keep `:` separator (still allowed) <br>3 Values like `"dingolfing"` stay as `STRING` -  still valid |
+| `SQ_Delay` | `'...' (wait=PT_Wait)? description=SQ_Description '...'` | `'...' (wait=PT_Wait)? description=SQ_Description` (no trailing `...`) |  **Must remove trailing `...` if present** - Instance 1 has: `... wait(10 s) Auf schnes Wetter ;) ...` -> trailing `...` is part of `description`, but *Grammar 2* makes trailing `...` *optional* **in the rule**, but crucially: the `description` now **must not** include the trailing `...` as part of the *syntax element*, because that would be ambiguous. <br>However - **Grammar 2 still includes `'...'` in the `SQ_Delay` LHS**, and allows `description=SQ_Description`, which *can* contain `...` as text *within* the description (since `SQ_Description` includes `...`). So trailing `...` *is still allowed*, *if* it's part of the description text, not the syntax delimiter. <br> BUT - **Grammar 2 removes the optional `'...'` suffix in `SQ_Delay` rule** (see: `SQ_Delay: '...' (wait=PT_Wait)? description=SQ_Description;` vs Grammar 1: `... description=SQ_Description '...'`)? Let's check precisely: <br>Grammar 2: `SQ_Delay: '...' (wait=PT_Wait)? description=SQ_Description;` - **no trailing `...`**.<br>That means: the trailing `...` is now *not part of the syntax*, so it would be parsed as part of `description`. Since `SQ_Description` includes `'...'` as a keyword token, it is syntactically allowed - so the instance remains valid *if* you keep the text `...` in the description.  Safe to keep as-is. |
+| `SQ_EncompassBegin` | Separate `SQ_EncompassBegin` + `SQ_EncompassEnd` rules |  **Still exists!** But wait - **`SQ_Encompass` is now a *single rule***: `SQ_Encompass: 'box' title=STRING color=SQ_Color (NEWLINE \| elements+=SQ_SequenceElement)* NEWLINE 'end' 'box';` |  **MUST change `SQ_EncompassBegin` + `SQ_EncompassEnd` to unified `SQ_Encompass` structure** - i.e., the `box ... end box` must be **one block**, and the new grammar **requires** that `end box` be on its own line (or at least preceded by `NEWLINE`).<br>In Instance 1: <br>```<br>box "Cloud Services" #8877cc<br>create control "CCC-Mock"<br>Bob o-> "CCC-Mock" ++: request(POST, "/event/${location}", [location : "dingolfing"])<br>... wait(10 s) Auf schnes Wetter ;) ...<br>end box<br>```<br> This still matches Grammar 2: <br> `'box' title=STRING color=SQ_Color` -> `box "Cloud Services" #8877cc`<br> then `(NEWLINE | elements+=SQ_SequenceElement)*` -> `create control...`, `Bob o->...`, `... wait...` (which includes NEWLINEs between)<br> then `NEWLINE 'end' 'box'` -> `end box` (newline before is already there)  |
+| `SQ_Delay` - **no `SQ_LifetimeHint` allowed after payload in messages** | In `SQ_Message`, `receiverlifetime=SQ_LifetimeHint` appears *after arrow*, *before* `:` payload/description |  Still unchanged - no impact on instance |
+| `SQ_Divider` - **Grammar 1 had `'==' label=SQ_Description '=='`**; Grammar 2 has `'==' label=SQ_Description` | `SQ_Divider: '==' label=SQ_Description '=='` (Grammar 1) | `SQ_Divider: '==' label=SQ_Description;` (Grammar 2) |  **CRITICAL**: Grammar 2 **removes the trailing `==`** - i.e., dividers must now be **exactly** `== <label>`, no closing `==`. <br>So any instance like `== Initialization ==` must become `== Initialization`. Same for `== Hier wirds kritisch ==` -> `== Hier wirds kritisch`, etc. |
+
+###  **Deleted in Grammar 2**
+| Rule | Grammar 1 | Grammar 2 | Action Required |
+|------|-----------|-----------|-----------------|
+| `SQ_ParticipantDefiniton` -> optional `keyword=` before `create`? | Yes: `('create' keyword=(SQ_ParticipantKeyword)?) | keyword=SQ_ParticipantKeyword` | Still exists - no deletion |
+| `SQ_LifetimeHint` in `SQ_Message` | `receiverlifetime=SQ_LifetimeHint` still present  | Still present  | No change |
+| `SQ_EncompassBegin`, `SQ_EncompassEnd` | Two separate rules |  Replaced with single `SQ_Encompass` rule - but the *construct* is preserved, just refactored | We must ensure syntax matches the unified rule - already discussed  |
+| **MOST IMPORTANT**: `SQ_LifetimeHint` in `SQ_Delay` |  No - `SQ_Delay` in Grammar 1 used `PT_Wait` and `SQ_Description`, not lifetime hints. No issue. |
+| **DELETE**: **`SQ_LifelineCtrl` no longer allows `color=COLOR` in Grammar 1?** | Grammar 1: `SQ_LifelineCtrl: 'activate' ... (color=COLOR)?` |  Still in Grammar 2: `(color=SQ_Color)?` | OK |
+| **DELETE**: **`SQ_NoteType` keyword 'note', 'hnote', 'rnote'** - still present  |
+| **DELETE**: **`SQ_ParticipantDefiniton` optional `create` keyword before keyword?** | Grammar 1: `('create' keyword=(SQ_ParticipantKeyword)?) | keyword=SQ_ParticipantKeyword` | Still in Grammar 2 -  |
+| **DELETE**: **`SQ_Stereotype` allowed `color=COLOR` inside `<< (char, color) >>`** | Grammar 1: `color=COLOR` | Grammar 2: `color=SQ_Color` - same thing, just renamed type - no deletion.  |
+
+ **Bottom line**: Only **two syntax changes are mandatory** to make Instance 1 -> Instance 2:
+
+1.  **Remove trailing `==` from all `SQ_Divider` instances**  
+   - `== Initialization ==` -> `== Initialization`  
+   - `== Hier wirds kritisch ==` -> `== Hier wirds kritisch`  
+   - `== Schicksalskram ==` -> `== Schicksalskram`
+
+2.  **Change `PT_ParameterMap` delimiters from `[...]` to `{...}`**  
+   - `[location : "dingolfing"]` -> `{location : "dingolfing"}`  
+   - `[ event: "42" ]` -> `{ event: "42" }`
+
+All other constructs are either preserved or semantically equivalent (just renamed types), and **comments, whitespace, newlines, indentation must remain identical** per instruction #3.
+
+---
+
+##  Final: Evolved Instance 2 (Grammar 2-compliant)
+
+```plantuml
+@startuml
+
+' Configuration
+header All Features PUML Diagram
+footer Seite %page%/%lastpage%
+skinparam roundcorner 25
+title TITEL =)
+hide footbox
+
+actor "Alice" << (O, #eeaaaa) >> #aF7
+
+autonumber 3 2
+[--> Alice : Externer Trigger
+activate Alice
+
+participant "Multiline\nBob" as Bob
+
+autoactivate on
+Alice -> Bob : start()
+
+== Initialization
+
+/'
+Multiline comment:
+Syntax bellow yields a 100 pixel high spacing :)
+'/
+||100||
+
+box "Cloud Services" #8877cc
+create control "CCC-Mock"
+Bob o-> "CCC-Mock" ++: request(POST, "/event/${location}", {location : "dingolfing"})
+... wait(10 s) Auf schnes Wetter ;) ...
+end box
+return response(200||201, { event: "42" })
+
+"CCC-Mock" -> "CCC-Mock" : bootSkynet()
+
+== Hier wirds kritisch
+
+Bob<-[#0000aa]->Alice : Comunicacin muy importante
+
+ref over Alice, Bob: Hier hngt ein ref Kasten\nmit mehreren Zeilen Text\n
+
+== Schicksalskram
+
+alt robot takeover
+  Alice -[#ffaaaa]>x "CCC-Mock" !! : Sie wurden soeben terminiert
+  destroy "CCC-Mock"
+  note left of Alice #eba : Alice ist groer Fan\nder Terminator Filmreihe ;)
+else peacful
+  loop 100 times
+    Alice -> "CCC-Mock" : request(POST, "/gift")
+    "CCC-Mock" -> Alice : Thank you =)
+  end
+end
+
+[<-- Alice : Result 
+
+@enduml
+```
+
+---
+
+###  Verification Checklist
+
+| Change | Done? | Explanation |
+|-------|-------|-------------|
+| Trailing `==` removed from dividers |  | 3 instances corrected (`== Initialization`, `== Hier wirds kritisch`, `== Schicksalskram`) |
+| `[...]` -> `{...}` in parameter maps |  | Two places: `{location : "dingolfing"}` and `{ event: "42" }` |
+| All whitespace, newlines, comments intact |  | Preserved exactly as in Instance 1 |
+| No new optional branches added |  | We only changed mandatory delimiters; didn't insert any new optional branches |
+| No omitted mandatory elements (e.g., quotes, `:`, `(`, `)`) |  | All literals preserved |
+
+Let me know if you'd like a **diff view**, or if you want me to generate the **AST/semantic mapping** for Instance 2.

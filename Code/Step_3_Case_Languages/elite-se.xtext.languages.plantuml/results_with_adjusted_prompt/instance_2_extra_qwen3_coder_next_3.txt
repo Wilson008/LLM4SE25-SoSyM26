@@ -1,0 +1,133 @@
+Let's proceed step by step to derive **Instance 2** from **Instance 1**, strictly following your constraints and the differences identified between **Grammar 1** and **Grammar 2**.
+
+---
+
+###  **Recap of Critical Differences (Grammar 1 -> Grammar 2)**
+
+| # | Change | Consequence for Instance Transformation |
+|---|--------|-----------------------------------------|
+| 1 | **`SQ_ParticipantDefiniton`** no longer allows standalone `'create'` without a participant keyword (e.g., `create "name"` is now invalid unless followed by a keyword like `actor`, `participant`, etc.). |  *But Instance 1 uses `create control "CCC-Mock"` - and `control` is a `SQ_ParticipantKeyword` - so this is still valid in Grammar 2. No change needed.* |
+| 2 | `SQ_Stereotype.color` changed from `COLOR` -> `SQ_Color`, and `SQ_Color` is now an OR of `HEXCOLOR | NAMEDCOLOR`. |  Instance 1 uses `<< (O, #eeaaaa) >>` -> the color is `#eeaaaa`, which is a valid `HEXCOLOR`. No change needed. |
+| 3 | **`SQ_Participant.color`** changed from `COLOR` -> `SQ_Color`. |  Instance 1: `actor "Alice" <<...>> #aF7` - `#aF7` is 3-digit hex (valid `HEXCOLOR`). No change. |
+| 4 | `SQ_Arrow` color syntax: `'[' color=SQ_Color ']'` -> Grammar 2 **removed space** inside brackets: `'[' color=SQ_Color']'`.<br> In Grammar 2, it's written as `color=SQ_Color']'` (no space before `]`). |  Instance 1 uses `[#0000aa]` - valid: no space, so compatible. **No change needed**. |
+| 5 | **`PT_ParameterMap`** syntax changed from `'[' ... ']'` -> `'{' ... '}'`. |  **Mandatory change** for all `request(...)` and `response(...)` calls with parameters. |
+| 6 | **`PT_Parameter`** changed from `name=ID ':' value=STRING` to `name=ID (':' value=PT_ParameterValue)?` where `PT_ParameterValue = ID \| STRING \| INT`. |  Instance 1 has `[location : "dingolfing"]` -> in new format: `{location : "dingolfing"}`. Also, values *may* omit colon (e.g., `port` instead of `port: 8080`) - but Instance 1 *uses colons*, so keep them. |
+| 7 | **`SQ_Delay`** rule: **removed** optional `description=SQ_Description '...'?` at the end - now only `'...' (wait=PT_Wait)? description=SQ_Description`. |  Instance 1: `... wait(10 s) Auf schnes Wetter ;) ...` - now must be: `... wait(10 s) Auf schnes Wetter ;) ...` - **still valid**, but the trailing `...` is optional in Grammar 2 - we keep it (as per constraint: do *not omit* any auxiliary punctuation like `...`). |
+| 8 | **`SQ_EncompassBegin` and `SQ_EncompassEnd` replaced by unified `SQ_Encompass`** - one rule with embedded elements. |  Instance 1 uses `box ... end box`. In Grammar 2, `SQ_Encompass` *is* the rule: `'box' title=STRING color=SQ_Color (NEWLINE \| elements+=SQ_SequenceElement)* NEWLINE 'end' 'box'`. So the syntax is identical. No change. |
+| 9 | **`SQ_SkinparamValue` simplified**: `name=ID value=SQ_SkinparamValue` where `SQ_SkinparamValue` is `SQ_Color \| INT \| ID \| STRING`. |  Instance 1: `skinparam roundcorner 25` -> `value = 25` (INT), still valid. |
+| 10 | **`SQ_ParticipantDefiniton` removed `order priority=INT` in some variants?** - no, `order` is still present in both.  |
+| 11 | `SQ_Description` terminal list: in Grammar 2, added `'...'` and `'=='` and `':'`. |  No effect on instance syntax - just parsing robustness. |
+| 12 | **`SQ_Divider`** removed redundant `'==' label=SQ_Description '=='` trailing `==` in Grammar 2? Actually, in Grammar 2, `SQ_Divider` is `'==' label=SQ_Description '=='`? Let's verify:  In Grammar 2, `SQ_Divider` is still `'==' label=SQ_Description '=='`. So **no change**. |
+| 13 | **`SQ_Note`** color changed from `COLOR` to `SQ_Color`. |  `#eba` is valid hex -> no change. |
+
+####  **CRITICAL SYNTAX CHANGES (Mandatory for Instance 2)**
+
+| Construct | Grammar 1 Instance | Grammar 2 Requirement |
+|----------|--------------------|------------------------|
+| `request(..., [location : "dingolfing"])` | `[...]` for parameter map | -> `{location : "dingolfing"}` |
+| `response(200\|\|201, [ event: "42" ])` | `[...]` for parameter map + `||` status codes | -> `{ event: "42" }`, but status codes remain `200\|\|201` (unchanged - only map syntax changes) |
+| `autonumber 3 2` | space-separated start+step | Still allowed in Grammar 2 (`start=INT step=INT`), no change |
+| `box ... end box` | unchanged | Still valid |
+
+ All other constructs (comments, whitespace, indents, multiline strings, `...`, `==`, etc.) are preserved *exactly*.
+
+---
+
+###  **Deriving Instance 2 from Instance 1**
+
+We will apply **only** the following replacements:
+- Replace every `[...]` around parameter maps with `{...}`
+- Keep all other tokens, punctuation, comments, and whitespace **identical**
+
+####  Instances in Instance 1 that need `[] -> {}`:
+
+1. `request(POST, "/event/${location}", [location : "dingolfing"])`  
+   -> `request(POST, "/event/${location}", {location : "dingolfing"})`
+
+2. `response(200||201, [ event: "42" ])`  
+   -> `response(200||201, { event: "42" })`
+
+ Note: No other `[...]` appears elsewhere. The `SQ_Description` in `description=SQ_Description` (e.g., `: start()`, `: request(...)`) is *not* a `PT_ParameterMap`, so brackets there remain unchanged.
+
+ Also, the trailing `...` in `... wait(10 s) Auf schnes Wetter ;) ...` stays - per constraints, we preserve all auxiliary punctuation.
+
+---
+
+###  **Final Instance 2 (Grammar 2-compliant)**
+
+```plantuml
+@startuml
+
+' Configuration
+header All Features PUML Diagram
+footer Seite %page%/%lastpage%
+skinparam roundcorner 25
+title TITEL =)
+hide footbox
+
+actor "Alice" << (O, #eeaaaa) >> #aF7
+
+autonumber 3 2
+[--> Alice : Externer Trigger
+activate Alice
+
+participant "Multiline\nBob" as Bob
+
+autoactivate on
+Alice -> Bob : start()
+
+== Initialization ==
+
+/'
+Multiline comment:
+Syntax bellow yields a 100 pixel high spacing :)
+'/
+||100||
+
+box "Cloud Services" #8877cc
+create control "CCC-Mock"
+Bob o-> "CCC-Mock" ++: request(POST, "/event/${location}", {location : "dingolfing"})
+... wait(10 s) Auf schnes Wetter ;) ...
+end box
+return response(200||201, { event: "42" })
+
+"CCC-Mock" -> "CCC-Mock" : bootSkynet()
+
+== Hier wirds kritisch ==
+
+Bob<-[#0000aa]->Alice : Comunicacin muy importante
+
+ref over Alice, Bob: Hier hngt ein ref Kasten\nmit mehreren Zeilen Text\n
+
+== Schicksalskram ==
+
+alt robot takeover
+  Alice -[#ffaaaa]>x "CCC-Mock" !! : Sie wurden soeben terminiert
+  destroy "CCC-Mock"
+  note left of Alice #eba : Alice ist groer Fan\nder Terminator Filmreihe ;)
+else peacful
+  loop 100 times
+    Alice -> "CCC-Mock" : request(POST, "/gift")
+    "CCC-Mock" -> Alice : Thank you =)
+  end
+end
+
+[<-- Alice : Result 
+
+@enduml
+```
+
+---
+
+###  **Verification Checklist**
+| Requirement | Met? |
+|-------------|------|
+| No mandatory elements omitted (e.g., single quotes, `==`, `...`, `::`, `\n`) |  |
+| No new optional/alternative rules instantiated (e.g., no named colors added, no empty `{}` created) |  |
+| Comments, whitespace, indents, empty lines preserved exactly |  |
+| Rules deleted in Grammar 2? None used in Instance 1 (e.g., old `PT_ParameterMap` with `[]` is gone - replaced with `{}`) |  |
+| Every `[...]` used as parameter map -> `{...}` |  |
+| No `PT_ParameterValue` syntax changed (colons kept) |  |
+| Not empty - full instance provided |  |
+
+Let me know if you'd like a diff-highlighted version or validation against Grammar 2.

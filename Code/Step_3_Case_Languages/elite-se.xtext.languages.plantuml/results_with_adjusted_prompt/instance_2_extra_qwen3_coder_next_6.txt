@@ -1,0 +1,160 @@
+ **Goal**: Transform **Instance 1** (written for **Grammar 1**) -> **Instance 2** (compatible with **Grammar 2**), respecting all your constraints.
+
+---
+
+###  **Key Grammar Changes (Grammar 1 -> Grammar 2)**
+Let's extract **critical changes that affect instance syntax or validity**, especially those that **require modification or removal** in Instance 1:
+
+| Change | Grammar 1 | Grammar 2 | Impact on Instance |
+|--------|-----------|-----------|--------------------|
+| **`SQ_EncompassBegin` / `SQ_EncompassEnd`** | Two separate rules | **Merged into `SQ_Encompass`** |  Must replace `box ... end box` with a *single block* where `box ... elements ... end box` is atomic - no `NEWLINE` allowed *inside* the box *before* `end box`? Wait - no: `SQ_Encompass` includes `(NEWLINE \| elements+=SQ_SequenceElement)*`, so syntax remains identical *except* we no longer need `SQ_EncompassEnd`. In instance: `box ... end box` stays, but `end box` is now part of one rule. **No textual change needed** -  safe. |
+| **`SQ_Divider` label** | `label=SQ_Description` | **Removed `==` suffix** - now just `'==' label=SQ_Description` |  No change - still `'==' ... '=='`, because original `SQ_Divider` in G1: `'==' label=SQ_Description '=='`. In G2: `'==' label=SQ_Description` - **wait!**<br>-> In G2, divider syntax is now just `'==' label=SQ_Description` - **no trailing `=='`!**<br> This is critical: Instance 1 has `== Initialization ==`, `== Hier wirds kritisch ==`, `== Schicksalskram ==` - all with *double* `==`. These **must be reduced to single trailing `==`**  <br>But wait - let's double-check G2 rule:  
+  ```  
+  SQ_Divider: '==' label=SQ_Description;  
+  ```  
+  ->  **Yes, trailing `=='` is gone**. So `'==' label=SQ_Description` expects **only one `==`** (prefix), no suffix. So `== foo ==` becomes **invalid**. We must change to `== foo`.  
+   But this looks odd - is this a *grammar bug* in G2 or intentional simplification? Given it's an evolution, we assume intentional. So we strip the trailing `==`. |
+| **Parameter map delimiters** | `PT_ParameterMap`: `'[' ... ']'` | Changed to `'{' ... '}'` |  Critical: All `[...]` in `request(...)`/`response(...)` parameters **must become `{...}`** |
+| **`PT_Parameter` syntax** | `name=ID ':' value=STRING` (only strings) | `name=ID (':' value=PT_ParameterValue)?`<br>`PT_ParameterValue = ID | STRING | INT` |  We can keep `[location : "dingolfing"]` -> `{location : "dingolfing"}`, and if value is string-like, it's fine. But also now support `value: 123`, `value: true` - but Instance 1 only uses strings, so no change needed *except* brackets. |
+| **`SQ_Color` type usage** | Used `COLOR` terminal (hex only) | Now uses `SQ_Color = HEXCOLOR | NAMEDCOLOR`<br>-> `NAMEDCOLOR = '#' ('a'..'z'|'A'..'Z')+` (e.g., `#lightblue`) |  Instance 1 uses only hex: `#eeaaaa`, `#aF7`, `#8877cc`, `#0000aa`, `#ffaaaa`, `#eba` - all valid `HEXCOLOR`. No change needed. |
+| **`SQ_Arrow` color syntax** | `['[' color=COLOR ']']?` inside arrow | `['[' color=SQ_Color ']']?` |  `SQ_Color` accepts same hex, so `[#eeaaaa]` still valid. |
+| **`SQ_Description`** | Included `COLOR` terminal | Replaced with `HEXCOLOR | NAMEDCOLOR` |  No change needed - `#eeaaaa` is `HEXCOLOR` in both. |
+| **Deleted: `SQ_LifetimeHint` on messages** | Allowed `SQ_LifetimeHint` after arrow, before `:` | **Removed from `SQ_Message`!**<br>`(receiverlifetime=SQ_LifetimeHint)?` -> **gone** |  Critical: Instance 1 uses:  
+  - `Bob o-> "CCC-Mock" ++` -> `++` is `SQ_LifetimeHint`  
+  - `Alice -[#ffaaaa]>x "CCC-Mock" !!` -> `!!`  
+  These are now **invalid in messages**, since G2 has *no* `receiverlifetime` in `SQ_Message`.  
+  But note: `SQ_LifelineCtrl` still supports `SQ_LifetimeHint` *on* `activate`/`deactivate`/`destroy` -  
+  -  `activate Alice` -> fine  
+  -  `o-> "CCC-Mock" ++` -> **must remove `++`**  
+  -  `-x "CCC-Mock" !!` -> **must remove `!!`**  
+  Wait - `SQ_LifetimeHint` is **not** part of `SQ_Message` in G2, but *is* part of `SQ_Return`.  
+  So in messages, lifetime hints like `++`, `!!`, `--`, `**` **are now illegal** and must be removed or moved elsewhere?  
+  However, in PlantUML semantics, `++` after an arrow means "auto-activate receiver". Since it's gone from G2's `SQ_Message`, and there's no separate `SQ_LifetimeHint` as a sibling to messages, we must **omit** them.  
+   But `SQ_LifelineCtrl` can be used explicitly: `activate "CCC-Mock"` - maybe the intention is to require explicit activation.  
+  -> We'll remove `++` and `!!` from message lines, per grammar. |
+| **`SQ_Skinparam` value parsing** | `colorval=COLOR \| numberval=INT \| idval=ID \| strval=STRING` (4 separate optional fields) | `value=SQ_SkinparamValue` where `SQ_SkinparamValue = SQ_Color \| INT \| ID \| STRING` |  No change needed - still valid to write `skinparam roundcorner 25` (INT), `skinparam [name] #color` (color), etc. |
+| **`SQ_Space`** | `'|' '|' ('|' | (height=INT '|' '|'))` | Unchanged |  `||100||` is still valid - unchanged. |
+| **`SQ_Delay`** | Had optional `description=SQ_Description '...'?` | Changed to `description=SQ_Description` (no trailing `...`) |  Instance 1: `... wait(10 s) Auf schnes Wetter ;) ...`  
+  -> In G2: `'...' (wait=PT_Wait)? description=SQ_Description;`  
+  So trailing `...` is gone.  
+  We must **remove the final `...`** - keeping `... wait(10 s) Auf schnes Wetter ;)`. |
+| **`PT_Response` codes** | `acceptableCodes+=INT ('|' '|' acceptableCodes+=INT)*` (e.g., `200\|\|201`) | Same - unchanged |  Keep `200\|\|201`. |
+| **`SQ_ParticipantDefiniton`** | `(... keyword=(SQ_ParticipantKeyword)?)` - optional `create` keyword | Unchanged - `create` still allowed |  `create control "CCC-Mock"` -> still valid. |
+| **`SQ_Ref`** | Unchanged - still `'ref' 'over' ...` |  No change. |
+| **Hidden terminal `COLOR` deleted** | `COLOR` terminal existed | Removed; `HEXCOLOR`/`NAMEDCOLOR` used instead |  No visible change - all `#eeaaaa` are `HEXCOLOR`. |
+
+---
+
+###  **Action Plan for Instance 1 -> Instance 2**
+
+Let's apply **all required changes** to Instance 1, one by one:
+
+1.  Remove trailing `==` from all dividers:
+   - `== Initialization ==` -> `== Initialization`
+   - `== Hier wirds kritisch ==` -> `== Hier wirds kritisch`
+   - `== Schicksalskram ==` -> `== Schicksalskram`
+
+2.  Replace `[...]` in `request(...)`/`response(...)` parameters -> `{...}`
+   - `[location : "dingolfing"]` -> `{location : "dingolfing"}`
+   - `[ event: "42" ]` -> `{event: "42"}`
+
+3.  Remove `++` and `!!` from messages:
+   - `Bob o-> "CCC-Mock" ++: request(...)` -> `Bob o-> "CCC-Mock": request(...)`
+   - `Alice -[#ffaaaa]>x "CCC-Mock" !! : Sie wurden soeben terminiert` -> `Alice -[#ffaaaa]>x "CCC-Mock" : Sie wurden soeben terminiert`
+   -  Keep `activate/deactivate/destroy` where appropriate (still in `SQ_LifelineCtrl`, e.g., `destroy "CCC-Mock"` - unchanged)
+
+4.  Remove trailing `...` from `SQ_Delay`:
+   - `... wait(10 s) Auf schnes Wetter ;) ...` -> `... wait(10 s) Auf schnes Wetter ;)`
+
+5.  Keep all:
+   - Comments (single quotes and multiline `/' ... '/`)
+   - White space, empty lines, indents, `\n`, escapes, quotes, spaces - unchanged
+   - All other arrows, stereotypes, colors, etc.
+
+---
+
+###  **Final: Instance 2 ( Grammar 2 compatible)**  
+Here is the **exact transformed instance**, with *only* the above changes applied - preserving every character, whitespace, comment, and format from Instance 1.
+
+```plantuml
+@startuml
+
+' Configuration
+header All Features PUML Diagram
+footer Seite %page%/%lastpage%
+skinparam roundcorner 25
+title TITEL =)
+hide footbox
+
+actor "Alice" << (O, #eeaaaa) >> #aF7
+
+autonumber 3 2
+[--> Alice : Externer Trigger
+activate Alice
+
+participant "Multiline\nBob" as Bob
+
+autoactivate on
+Alice -> Bob : start()
+
+== Initialization
+
+/'
+Multiline comment:
+Syntax bellow yields a 100 pixel high spacing :)
+'/
+||100||
+
+box "Cloud Services" #8877cc
+create control "CCC-Mock"
+Bob o-> "CCC-Mock": request(POST, "/event/${location}", {location : "dingolfing"})
+... wait(10 s) Auf schnes Wetter ;) 
+end box
+return response(200||201, {event: "42"})
+
+"CCC-Mock" -> "CCC-Mock" : bootSkynet()
+
+== Hier wirds kritisch
+
+Bob<-[#0000aa]->Alice : Comunicacin muy importante
+
+ref over Alice, Bob: Hier hngt ein ref Kasten\nmit mehreren Zeilen Text\n
+
+== Schicksalskram
+
+alt robot takeover
+  Alice -[#ffaaaa]>x "CCC-Mock" : Sie wurden soeben terminiert
+  destroy "CCC-Mock"
+  note left of Alice #eba : Alice ist groer Fan\nder Terminator Filmreihe ;)
+else peacful
+  loop 100 times
+    Alice -> "CCC-Mock" : request(POST, "/gift")
+    "CCC-Mock" -> Alice : Thank you =)
+  end
+end
+
+[<-- Alice : Result 
+
+@enduml
+```
+
+---
+
+###  Verification of Key Edits:
+| Original (G1) | Updated (G2) | Reason |
+|---------------|--------------|--------|
+| `== Initialization ==` | `== Initialization` | G2 `SQ_Divider` lacks trailing `==` |
+| `== Hier wirds kritisch ==` | `== Hier wirds kritisch` | Same |
+| `== Schicksalskram ==` | `== Schicksalskram` | Same |
+| `{location : "dingolfing"}` | `{location : "dingolfing"}` | `[...]` -> `{...}` (G2 `PT_ParameterMap`) |
+| `Bob o-> "CCC-Mock" ++: request(...)` | `Bob o-> "CCC-Mock": request(...)` | `++` removed - `SQ_LifetimeHint` no longer allowed in messages |
+| `Alice -[#ffaaaa]>x "CCC-Mock" !! : ...` | `Alice -[#ffaaaa]>x "CCC-Mock" : ...` | `!!` removed - same reason |
+| `... wait(10 s) ...` | `... wait(10 s)` | Trailing `...` gone in G2 `SQ_Delay` |
+| All other syntax unchanged | - | Comments, escapes, spacing, `autonumber`, `box ... end box`, `actor`, etc. preserved |
+
+ **Instance 2 is now fully compatible with Grammar 2**, and follows all your constraints (no omitted mandatory tokens, no new optional branches added, noauxiliary info changed).
+
+Let me know if you'd like:
+- A syntax check / validation trace,
+- An annotation of each change side-by-side,
+- Or to proceed with Grammar 3 analysis!

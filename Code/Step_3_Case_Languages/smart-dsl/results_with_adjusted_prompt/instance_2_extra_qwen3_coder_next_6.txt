@@ -1,0 +1,128 @@
+Understood. Let's proceed step by step to evolve **Instance 1** (which conforms to **Grammar 1**) into **Instance 2**, conforming strictly to **Grammar 2**.
+
+---
+
+###  Recap of Grammar 1 -> Grammar 2 Changes Affecting Instance Syntax
+
+| Grammar 1 Feature | Status in Grammar 2 | Action for Instance Evolution |
+|-------------------|---------------------|------------------------------|
+| `Modifier` rule |  **Deleted** | **Remove all `Modifier` blocks** and replace or remove their usages |
+| `modifiers` in `Contract` body |  Deleted | No top-level modifiers allowed |
+| `modifiersKeyword='modifiers:'` in `Method` |  Deleted | Replace with `validators:` referencing `Validator` instead |
+| `Modifier [...]` references like `onlyOwner, validNumber` |  Invalid | Must be replaced by `Validator` definitions + `validators:` usage |
+| `Modifier name=ID (...) { ... }` -> must become `Validator name=ID (...) { ... }` |
+| New rule: `Validator` (same internal structure as old `Modifier`) |  Added | Replaces `Modifier`; use same body (`message:`, `validation:`) |
+| New rule: `DataStore` |  Added, but optional (`| dataStores+=DataStore*`) | We'll keep it *absent* per your instruction (do not instantiate optional/new constructs) |
+| `validators+=Validator` in `Method` body (`validators:` keyword) |  Replaces `modifiers:` | Update method body accordingly |
+
+>  Crucially: **`Validator` replaces `Modifier`**, with identical *structure* but different *keyword* (`validator` vs `Modifier`).  
+> So we convert each `Modifier` block into a `Validator` block.
+
+---
+
+###  Evolving Instance 1 -> Instance 2
+
+#### Original Instance 1:
+```xtext
+Contract SimpleContract {
+	version: "v1.0.0"
+	hasReceive
+	ownership
+	modifiable total integer
+	
+	Modifier onlyOwner () {
+		message: "Only the contract owner can call this function."
+		validation: "msg.sender == owner"
+	}
+	
+	Modifier validNumber(x integer) {
+		message: "The number must be greater than 4"
+		validation: "x>4"
+	}
+	
+	method example (x integer, name string, lastname string) -> x integer, name string {
+		description: "This is a sample of method"
+		modifiers: onlyOwner, validNumber
+		events: XUpdated, NameUpdated 
+	}
+	
+	event XUpdated (x integer){
+		description: "Este evento es para notificar cuando el numero se ha actualizado"
+	}
+	
+	event NameUpdated(name string){
+		description: "Este evento es para notificar cuando el name se ha actualizado"
+	}
+}
+```
+
+#### Step-by-step transformation:
+
+1. **Top-level: `Modifier` blocks -> remove and replace with `Validator` blocks**  
+   - Change `Modifier onlyOwner () { ... }` -> `validator onlyOwner () { ... }`  
+   - Change `Modifier validNumber(x integer) { ... }` -> `validator validNumber (x integer) { ... }`
+
+2. **Top-level: `modifiers+=Modifier*` removed -> delete old top-level `Modifier`s**  
+   -> But wait! Grammar 2 allows `validators+=Validator*` at top level (yes - `attributes | events | methods | validators | dataStores`).  
+   ->  So we *keep* them - just rename `Modifier` -> `Validator`.
+
+3. **In `Method example`, replace `modifiers:` -> `validators:`**  
+   - `modifiers: onlyOwner, validNumber` -> `validators: onlyOwner, validNumber`  
+   - (The references remain the same - `onlyOwner` and `validNumber` now point to `Validator` instead of `Modifier`.)
+
+4. **No `DataStore` added** - per instruction, do not instantiate optional/new constructs.
+
+5. **Preserve all white space, indents, formatting, comments (none), punctuation, keywords (e.g., `version:`, `hasReceive`, `ownership`, `->`, `{`, `}`, etc.) exactly.**
+
+---
+
+###  Final Instance 2 (conforming to Grammar 2)
+
+```xtext
+Contract SimpleContract {
+	version: "v1.0.0"
+	hasReceive
+	ownership
+	modifiable total integer
+	
+	validator onlyOwner () {
+		message: "Only the contract owner can call this function."
+		validation: "msg.sender == owner"
+	}
+	
+	validator validNumber(x integer) {
+		message: "The number must be greater than 4"
+		validation: "x>4"
+	}
+	
+	method example (x integer, name string, lastname string) -> x integer, name string {
+		description: "This is a sample of method"
+		validators: onlyOwner, validNumber
+		events: XUpdated, NameUpdated 
+	}
+	
+	event XUpdated (x integer){
+		description: "Este evento es para notificar cuando el numero se ha actualizado"
+	}
+	
+	event NameUpdated(name string){
+		description: "Este evento es para notificar cuando el name se ha actualizado"
+	}
+}
+```
+
+---
+
+###  Verification against Grammar 2 rules:
+-  `Contract` uses allowed constructs: `attributes`, `validators`, `methods`, `events`
+-  `Modifier` removed -> replaced with `Validator`
+-  `validators:` in `Method` instead of `modifiers:`
+-  `validators` and `events` keywords preserved (same case, spacing, colon)
+-  All strings, identifiers, parentheses, braces, arrows (`->`) unchanged
+-  No `DataStore` added (optional)
+-  Formatting identical (single blank line before `event` blocks, indentation preserved)
+
+Let me know if you'd like:
+- A version that *also* adds `DataStore`s (for contrast),
+- A parser test script,
+- Or a diff view highlighting all changes.

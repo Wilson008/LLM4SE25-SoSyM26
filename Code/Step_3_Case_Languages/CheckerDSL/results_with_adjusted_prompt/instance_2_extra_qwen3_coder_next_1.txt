@@ -1,0 +1,376 @@
+ **Goal**: Transform **Instance 1** (which follows Grammar 1) into **Instance 2**, which must conform to **Grammar 2**.
+
+---
+
+###  Recap of Key Grammar Differences (from Grammar 1 -> Grammar 2)
+
+| Rule | Grammar 1 | Grammar 2 | Consequence for Instance Transformation |
+|------|-----------|-----------|-----------------------------------------|
+| `ChkVariableDeclaration` | `'value' '{' spValue=SpValue '}'` | `'sp' '{' spValue=SpValue '}'` | Replace **`value`** with **`sp`** in special-value sections |
+| `Helper.select` | `select '(' vars+=ValidID (',' vars+=ValidID)* ')'` | `select '(' vars+=ValidID (',' vars+=ValidID)* ':' ((var3=ChkVariables) '..' (var4=ChkVariables)) ')'` | `select` may now accept an optional range (e.g., `select(k: 1..n)`), but since the range is **optional**, and per your instruction **do not instantiate optional features**, we keep `select(...)` as-is - no range added. |
+| `FormatExpression` | Uses `ValidID` directly in format args: `1 (c[i],p[i],t[i])` | Introduces `FormatVariable` -> `fv=ChkVariable ('<' (count=CHK_NUMBER) '>')?`<br>But `ChkVariable` = `(pref?)var('`'?)( '['...']'*)`, and `FormatVariable` wraps it - **no `[]` allowed in `FormatVariable` directly**! |  **Critical issue**: In Grammar 1, `FormatExpression` allowed `c[i]` (array with index), e.g., `n (c[i],p[i],t[i])`. In Grammar 2, `FormatVariable = ChkVariable ('<' count '>')?`, and `ChkVariable` supports indices (`['[v+=...]']*`), so `c[i]` *is still valid* as `ChkVariable` - **but** the inner `i` must be a `ValidID` or `CHK_NUMBER`, not arbitrary expression. Since `i` is a simple ID, `c[i]` remains syntactically valid.<br><br>However: the *old* `FormatVariable` used `ValidID`, and the *new* uses `ChkVariable` - but `c[i]` is still parsed as a `ChkVariable` (no prefix, name `c`, with index `[i]`). So **no change needed** for this part.<br><br>One more detail: `count` in `FormatVariable` now expects `CHK_NUMBER`, i.e., `INT` or `ValidID`. In Instance 1, `y<n>` is used -> `n` is a variable, but in Grammar 2, it's accepted as `ValidID` -> still OK.  |
+| `Limit` rule | Same in both grammars (unchanged) | - | No change. |
+| `CHK_NUMBER` | `CHK_INT \| ValidID` (same) | - | No change. |
+
+ So, the **only mandatory syntactic change** required for Instance 1 -> Instance 2 is:
+
+>  Replace **`value`** -> **`sp`** (since `'value'` was part of `ChkVariableDeclaration` in Grammar 1, and Grammar 2 changed it to `'sp'`).
+
+But wait - **does Instance 1 actually use `value` anywhere?**  
+Let's double-check Instance 1:
+
+ Scanning Instance 1 for `value`:
+
+```dsl
+// variable declaration
+int tc (subtask 1 : 1..100)
+int n (subtask 1 : 1..100)
+...
+int[n] c (subtask 1 : 1..100)
+...
+int point
+int[n] y (0..1) // y adalah nomor tempat knapsack item i atau 0 jika tidak dipilih
+```
+
+ **No `value` keyword appears at all** - no `value { ... }` block. So **no `value` -> `sp` rewrite is needed**.
+
+But wait - what about **deleted or renamed elements**? Are there any rules that *disappeared* in Grammar 2 that might appear in Instance 1?
+
+ Checking `arr+='[' (sz+=CHK_NUMBER)? ']'` in `ChkVariableDeclaration` (Grammar 1)  
+-> In Grammar 2, changed to `('[' sz+=CHK_NUMBER ']')*` (no `arr` alias, and `sz` is singular, but `*` remains, and `sz+=` still allowed).
+
+Also, Grammar 1 had:
+```xtext
+ChkVariableDeclaration:
+  type=ChkTypeReference (arr+='[' (sz+=CHK_NUMBER)? ']')* name=ValidID
+  ('(' limit1=Limit (';' limit+=Limit)* ')')?
+  ('value' '{' spValue=SpValue '}')?;
+```
+Grammar 2:
+```xtext
+ChkVariableDeclaration:
+  type=ChkTypeReference ('[' sz+=CHK_NUMBER ']')* name=ValidID
+  ('(' limit1=Limit (';' limit+=Limit)* ')')?
+  ('sp' '{' spValue=SpValue '}')?;
+```
+
+-> The only difference:  
+- `arr+=` -> removed alias (no semantic impact)  
+- `sz+=CHK_NUMBER` instead of `(sz+=CHK_NUMBER)?` -> now `sz` is required *if* `'['` is used. But in Grammar 2, `sz+=CHK_NUMBER` is still optional in the sense that `'[' ... ']'` is optional (due to `*`), so `int[] x` would be invalid now (since `sz` required if brackets present), but `int[n] x` is fine.
+
+ **Instance 1 uses `int[n] c`** - valid in both.
+
+ So: **No rule is removed or changed in a way that invalidates Instance 1 syntax** - except for `value` -> `sp`, and since `value` is unused, Instance 1 already conforms to Grammar 2.
+
+Wait - but the user said: *"Now I want you to analyze the differences [...] and [...] modify instance_1 and get instance_2, which will follow grammar_2."*
+
+If Instance 1 *already* conforms to Grammar 2, then **Instance 2 = Instance 1** - but is that acceptable?
+
+ Yes - per your instruction: *"Do not omit any mandatory elements"* and *"Do not miss or add any auxiliary information..."* - so if no change is needed, the best attempt is to return the **exact same instance**.
+
+But hold on - let's double-check **one subtle point**: in Grammar 1, the `select(...)` helper didn't support the range syntax; in Grammar 2 it does - but since the range is optional (`(...)?`), and we're not *required* to instantiate optional parts, `select(k,l)` remains valid.
+
+However - **Grammar 2 changed the `select` rule to require a colon `:` before the range**. So:
+
+Grammar 1:
+```xtext
+select='select' '(' vars+=ValidID (',' vars+=ValidID)* ')'
+```
+
+Grammar 2:
+```xtext
+select='select' '(' vars+=ValidID (',' vars+=ValidID)* ':' ((var3=ChkVariables) '..' (var4=ChkVariables)) ')'
+```
+
+ **This is *not* optional in the way I assumed** - the `:` is **mandatory** now, but the range (`(var3..var4)`) is optional.
+
+Let's re-parse Grammar 2's `select`:
+
+```xtext
+select='select' '(' vars+=ValidID (',' vars+=ValidID)* ':' ((var3=ChkVariables) '..' (var4=ChkVariables)) ')'
+```
+
+Breaking it down:
+- `'select' '('`
+- `vars+=ValidID (',' vars+=ValidID)*` -> e.g., `k`, `k,l`
+- **`':'`** -> *required*
+- `((var3=ChkVariables) '..' (var4=ChkVariables))?` -> optional range
+- `')'`
+
+So: **the `:` is mandatory**, and the range is optional.
+
+That means in Grammar 2:
+-  `select(k: 1..n)` - valid  
+-  `select(k:)` - *valid?* No - because after `:` we have `((var3..var4))?`, so zero occurrences of `var3..var4` would mean `:` followed by `)`, i.e., `select(k:)` is syntactically possible (empty range), but semantically odd.
+
+But in Grammar 1: `select(k,l)` is valid.
+
+In Grammar 2: `select(k,l)` -> missing `:` before `)` -> **NOT VALID**.
+
+ **Critical!**  
+Instance 1 has:
+
+```dsl
+(select(k,l) where 1<=k and k<l and l<=n and c[k]!=c[l] or p[k]!=p[l] or t[k]!=t[l])
+```
+
+and
+
+```dsl
+(select(k) where y[k]==0)
+```
+
+All of which use `select(...)` *without* `:` -> **invalid in Grammar 2**.
+
+So to fix this, we must **insert `:` after variable list**, and optionally add a range (but per instruction: *do not instantiate optional features unless necessary*). Since `:` is mandatory, but the range is optional, and the range can be empty only if we allow `select(k:)`, which is syntactically valid, but may be undesirable.
+
+However, `((var3=ChkVariables) '..' (var4=ChkVariables))?` means the `var3..var4` part is optional - so the rule *requires* the `:`, but allows `:` with *nothing after it* - i.e., `select(k:)` is legal.
+
+But is that what we want? The user said:
+
+> "If grammar_2 adds a new grammar rule or a new attribute that is optional or in an 'OR' relationship (i.e., |), then please do not instantiate it."
+
+The colon is **not optional**, so we *must* add it.
+
+The range part *is* optional, and per instruction, **we should not add a range** unless needed. But we *can* leave it empty -> `select(k:)`.
+
+However - is `select(k:)` semantically meaningful? Probably not, but since it's syntactically valid and we're required to avoid extra semantics, it's the safest.
+
+But wait - can we provide an *empty* range? In the grammar:
+```xtext
+((var3=ChkVariables) '..' (var4=ChkVariables))?
+```
+This means either:
+- nothing (0-1 occurrences), or  
+- a valid range.
+
+So yes, `select(k:)` is allowed (empty range), though unusual.
+
+Alternatively - is there a way to make the range default? No - and per your instruction, we must not add meaningful content (e.g., `1..n`) because that's instantiating an optional part.
+
+ Therefore, we will:
+- Add `:` after variable list in all `select(...)` calls
+- **Leave range blank** -> `select(k:)`, `select(k,l:)`
+
+But wait - what about the parser's ambiguity? `select(k,)` (with comma but no `:`) vs `select(k:)`. Since the `:` is *required*, and we're inserting it explicitly, no issue.
+
+Let's scan Instance 1 for all `select(...)` usages:
+
+1. `select(k,l) where 1<=k ...`  
+   -> becomes `select(k,l:) where ...`
+
+2. `select(k) where y[k]==0` (appears twice)  
+   -> becomes `select(k:) where ...`
+
+3. `select(k) where y[k]==1` (appears multiple times)  
+   -> becomes `select(k:) where ...`
+
+Note: Instance 1 has **no `select(k: 1..n)`** - so we don't add ranges.
+
+ So, the only changes needed are:
+
+| Original | Updated |
+|---------|---------|
+| `select(k,l)` | `select(k,l:)` |
+| `select(k)` | `select(k:)` |
+
+All other syntax remains unchanged - including comments, whitespace, format, etc.
+
+Let's verify no other rules changed:
+
+- `ChkVariableDeclaration` - `value` -> `sp`, but **not used**, so   
+- `select` - now requires `:`, so  change as above  
+- `FormatExpression` - `FormatVariable` uses `ChkVariable`, which allows array access - so `c[i]`, `p[i]`, `y<n>` remain valid  
+- `input { ... }` and `output { ... }` - unchanged  
+- `hidden { 1 (y<n>) }` - `y<n>` -> `n` is `ValidID`, and `CHK_NUMBER = CHK_INT | ValidID`, so 
+
+Now - let's produce **Instance 2**, preserving *all* original formatting (indentation, blank lines, comments, tabs/spaces exactly as in Instance 1), only modifying `select` to include `:`.
+
+---
+
+###  Final Instance 2 (Evolved from Instance 1 to conform to Grammar 2)
+
+```dsl
+// Specification untuk soal knapsack Polo the Penguin and the Test
+class Knapsack{
+	/*
+	 * variable declaration
+	 * akan digunakan untuk men-generate atribut private,
+	 * fungsi untuk membaca, menulis, dan validator variable tersebut
+	 */
+	
+	// variable untuk input
+	int tc (subtask 1 : 1..100) // tc is number of test cases
+	int n (subtask 1 : 1..100) // n is number of questions
+	int w (subtask 1 : 1..100) // w is time limit for study
+	int[n] c (subtask 1 : 1..100) // c[i] is the number of tests that will contain this question
+	int[n] p (subtask 1 : 1..100) // p[i] is the number of points that he will get for correctly answering this question on each of tests
+	int[n] t (subtask 1 : 1..100) // t[i] is the amount of time (in minutes) that he needs to spend to learn this question
+	
+	// variable untuk output
+	int point // point is maximal possible total number of points he can get for all tests if he studies for no more than W minutes
+	
+	// hidden variable (for mr only)
+	int[n] y (0..1) // y adalah nomor tempat knapsack item i atau 0 jika tidak dipilih
+	
+	score {
+		(1 : 100)
+	}
+	
+	/*
+	 * input format
+	 */
+	input {
+		1 (tc)
+		for (k,tc) {
+			1 (n,w) // 1 baris pertama berisi 2 buah integer n dan w
+			n (c[i],p[i],t[i]) // n baris berikutnya berisi 3 buah integer c,p,t
+		}
+	}
+	
+	/*
+	 * output format
+	 */
+	output {
+		1 (point) // 1 baris berikutnya berisi 1 buah integer point
+	}
+	
+	hidden {
+		1 (y<n>)
+	}
+	
+	MR 1 {
+		(select(k,l:) where 1<=k and k<l and l<=n and c[k]!=c[l] or p[k]!=p[l] or t[k]!=t[l])
+		followup {
+			(c` = swap(c,k,l))
+			(p` = swap(p,k,l))
+			(t` = swap(t,k,l))
+		}
+		check {
+			
+		}
+		
+	}
+	
+	MR 3 {
+		(select(k:) where y[k]==0)
+		(def cc = random(0..100))
+		followup {
+			(t`[k] = t[k]+cc)
+		}
+		check {
+			
+		}
+	}
+	
+	MR 4 {
+		(select(k:) where y[k]==0)
+		(def cc = random(0..100))
+		followup {
+			(p`[k] = p[k]-cc)
+		}
+		check {
+			
+		}
+	}
+	
+	MR 5 {
+		(def c1 = sum(t) where y[i]==1)
+		followup {
+			(c`[1] = c1)
+		}
+		check {
+			
+		}
+	}
+	
+	MR 6 {
+		(def cnew = min(c) where y[i] != 0)
+		(def pnew = min(p) where y[i] != 0)
+		(def tnew = max(t) where y[i] != 0)
+		followup {
+			(n` = n+1)
+			(c` = add(c,cnew))
+			(p` = add(p,pnew))
+			(t` = add(t,tnew))
+		}
+		check {
+			
+		}
+	}
+	
+	MR 7 {
+		(select(k:) where y[k]==0)
+		followup {
+			(n` = n-1)
+			(c` = remove(c,k))
+			(p` = remove(p,k))
+			(t` = remove(t,k))
+		}
+		check {
+			
+		}
+	}
+	
+	MR 8 {
+		(select(k:) where y[k]==1)
+		followup {
+			(n` = n-1)
+			(c`[1] = c[1]-t[k])
+			(c` = remove(c,k))
+			(p` = remove(p,k))
+			(t` = remove(t,k))
+		}
+		check {
+			(point` = point-p[k]*c[k])
+		}
+	}
+	
+	MR 9 {
+		(select(k,l:) where 1<=k and k<l and l<=n and y[k]==1 and y[l]==1)
+		followup {
+			(c`[k] = 1)
+			(p`[k] = c[k]*p[k]+c[l]*p[l])
+			(t`[k] = t[k]+t[l])
+			(n` = n-1)
+			(c` = remove(c,l))
+			(p` = remove(p,l))
+			(t` = remove(t,l))
+		}
+		check {
+			
+		}
+	}
+	
+	MR 11 {
+		(select(k:) where y[k]==1)
+		(def cc = random(0..100))
+		followup {
+			(p`[k] = p[k]+cc)
+		}
+		check {
+			(point` = point+cc*c[k])
+		}
+	}
+	
+	MR 12 {
+		(select(k:) where y[k]==1)
+		(def cc = random(0..100))
+		followup {
+			(c`[k] = c[k]+cc)
+		}
+		check {
+			(point` = point+cc*p[k])
+		}
+	}
+}
+```
+
+ **Verification**:
+- All `select(...)` now have `:` - required by Grammar 2  
+- No `:` range added (as per instruction: optional part not instantiated)  
+- `value` -> `sp` not triggered (unused)  
+- All comments, indentation, line breaks, whitespace preserved  
+- No other syntactic elements modified
+
+This is **Instance 2** - a minimal, faithful transformation of Instance 1 to conform with Grammar 2.

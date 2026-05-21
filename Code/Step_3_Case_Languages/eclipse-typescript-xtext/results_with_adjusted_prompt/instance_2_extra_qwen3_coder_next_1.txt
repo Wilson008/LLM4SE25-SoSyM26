@@ -1,0 +1,81 @@
+Understood. Let's carefully evolve **Instance 1** (which is valid for **Grammar 1**) into **Instance 2** (valid for **Grammar 2**), based on the formal differences identified earlier.
+
+---
+
+###  Recap of Key Changes from Grammar 1 -> Grammar 2  
+(relevant for instance transformation)
+
+| # | Change | Implication for Instance |
+|---|--------|--------------------------|
+| 1 | `Typescript` top-level rule changed: `interfacesAndClasses += ...` -> `interfacesAndClasses = InterfacesAndClasses` |  No syntax change - `InterfacesAndClasses` just wraps elements. Can ignore; same surface syntax. |
+| 2 | **`Declaration` rule introduced**, and `InterfaceOrClassDeclaration` introduced as wrapper | -> **No change required to syntax of `interface`/`class`**, since they remain structurally identical. But: `docComment` is now *allowed before* `interface`/`class`, and **Grammar 2 now expects `DocComment` support at declaration level**, though it's optional. Since Instance 1 has **no doc comments**, and `docComment` is optional, we keep the original formatting untouched - **do not add** `/** ... */` unless already present (it isn't). |
+| 3 | `InterfaceDeclaration` and `ClassDeclaration` **no longer directly assign `objectType=ObjectType`** (moved to `InterfaceOrClassDeclaration`) | -> **No syntactic change**: `{ ... }` still comes *after* `interface X extends ...`, and `objectType` is still part of the AST - just not directly on the rule. So syntax remains unchanged. |
+| 4 | **`ModuleDeclaration` now has optional `docComment` before `module` keyword** | Instance 1 has *no* doc comment on module. Since it's optional, **keep as-is**. |
+| 5 | **`ModuleElement` now uses `Declaration` instead of `(ClassDeclaration \| InterfaceDeclaration)`** | Again, syntactically identical: `export interface X {  }` is still valid, as `Declaration` just wraps it. No change. |
+| 6 | **`ImportDeclaration` unchanged syntactically** | Keep `import Y = A;` unchanged.  |
+| 7 | **`DocComment`, `AnnotationLine`, and related terminals added** | -> Only *add* doc comments if they already existed. Instance 1 has **no** `/** ... */`, so we **do not insert** any. |
+| 8 | **Deleted in Grammar 2?** None of the deleted features (`InterfaceOrClassDeclaration` is *new*, not deleted), but note: `InterfaceDeclaration` and `ClassDeclaration` still exist - they just have a different parent rule. No removal needed. |
+
+ **Critical point**:  
+> **Grammar 2 does *not* delete or rename any syntax** - it refactors structure (e.g., introducing `Declaration`, `InterfaceOrClassDeclaration`) for better AST organization - but the **surface syntax remains identical** to Grammar 1.
+
+ Let's double-check:  
+- Is there *any* syntactic construct in Instance 1 that is **invalid** in Grammar 2?
+
+Let's test each line of Instance 1 against Grammar 2:
+
+```ts
+module A { 
+ export interface X { s: string } 
+} 
+ 
+module B { 
+ /*var A = 1; */ 
+ import Y = A; 
+}
+```
+
+| Line | Grammar 2 compatibility |
+|------|-------------------------|
+| `module A {` |  `ModuleDeclaration`: `docComment?` is optional -> allowed |
+| ` export interface X { s: string }` |  `ModuleElement`: `exported? = "export"`, `moduleContent = Declaration` -> `Declaration = docComment? + declaration=InterfaceOrClassDeclaration`; `InterfaceOrClassDeclaration = InterfaceDeclaration | ClassDeclaration` + `objectType=ObjectType` - **but note**: `objectType=ObjectType` is attached *outside* `InterfaceDeclaration`, so the `{ s: string }` must still appear *after* `interface X` - and it does.  |
+| `}` |  |
+| (empty line) |  - whitespace preserved per constraint |
+| `module B {` |  |
+| ` /*var A = 1; */` |  - comment inside module is allowed (and ignored) |
+| ` import Y = A;` |  - `ImportDeclaration` unchanged |
+| `}` |  |
+
+ **Conclusion**:  
+**Instance 1 is *already syntactically valid* for Grammar 2** - *no modification needed*.
+
+But wait - constraint 5 says:  
+> **"Always output your best attempt at the evolved instance, even if incomplete. Never return an empty result."**
+
+And constraint 2 says:  
+> **"If grammar_2 adds a new grammar rule [...] and the instance doesn't use the new option, do not instantiate it."**
+
+Since the grammar evolution is purely structural (AST refactoring) and *does not change allowed tokens, order, or mandatory syntax*, **the evolved instance is identical**.
+
+---
+
+###  Final Answer: **Instance 2**
+
+```ts
+module A { 
+ export interface X { s: string } 
+} 
+ 
+module B { 
+ /*var A = 1; */ 
+ import Y = A; 
+}
+```
+
+ All original content preserved:  
+- Same whitespace, indentation, line breaks  
+- Same comments (unchanged, as allowed)  
+- Same `export`, `import`, `module`, `interface` syntax  
+- No optional new features added (e.g., doc comments), per constraint #2  
+
+Let me know if you'd like a version with doc comments *optional*, or to test with Grammar 2's `DocComment` features - but per your rules, we only evolve strictly to match Grammar 2 *without adding optional extras*.

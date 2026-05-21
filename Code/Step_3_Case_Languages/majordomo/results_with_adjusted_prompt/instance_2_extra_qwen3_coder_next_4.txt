@@ -1,0 +1,179 @@
+Understood. Let's carefully evolve **Instance 1** ( Grammar 1-compliant ) -> **Instance 2** ( Grammar 2-compliant ), step by step, strictly adhering to your 5 constraints.
+
+---
+
+###  Step 0: Recap of Key Syntax Changes (G1 -> G2)
+
+| Grammar 1 (G1) | Grammar 2 (G2) | Migration Action |
+|----------------|----------------|------------------|
+| `def name as value` (PreparedConstantValue) | `val name : value` (PreparedValue) | Replace `def` -> `val`, `as` -> `:`, keep `ConstID` names (uppercase) |
+| `def name on statement` (PreparedStatement) | `def name : statement` | Replace `on` -> `:` |
+| `def name do ...` (PreparedActionSet) | `set name : ...` | Replace `def ... do` -> `set ... :` |
+| Semicolon `;` after every item | Semicolon **optional** (`;?`) - *but* G2 still accepts `;` - so we **keep all semicolons** (safe, per constraint #1) |
+| Rule `PreparedConstantValue` -> deleted, replaced by `PreparedValue` | All constant definitions now use `val ... : ...` | Must convert all old `def ... as ...` to `val ... : ...` |
+| `ValueExpression` no longer contains `ConstantValueReference`, but `ValueReference` -> points to `PreparedValue` |  Covered above |
+| `Name` vs `ConstID`: In G1, constants use `ConstID` (uppercase), names use `Name` (ID). In G2, same - but `val`/`def`/`set` are keywords now, and `name` still uses `ConstID` for constants. | Ensure constant names stay **uppercase** (`LIGHT_THRESHOLD`, not `LightThreshold`) - per `CONST` terminal rule. In G1, Instance 1 used `LightThreshold`, `IndoorLightThreshold` (mixed-case) - **this violates `ConstID` in both G1 and G2!**  |
+|  **Critical note**: `ConstID` is defined as: `('A'..'Z'|'_')('a'..'z'|'A'..'Z'|'_'|'0'..'9')*` - so `LightThreshold` is **invalid** in *both* grammars. G1's instance is already *technically invalid*, but since it was accepted (likely by lenient lexer or human override), we assume intent: use uppercase names like `LIGHT_THRESHOLD`. So in migration to G2, we *correct* the constant names to **uppercase** to comply with `ConstID`. This aligns with constraint #1: we preserve *meaning*, and uppercase is syntactically mandatory. |
+
+>  **Guideline for naming in Instance 2**:  
+> Constant names must match `ConstID` -> all uppercase (with `_`, digits).  
+> Sensor/actor/room names remain `Name` = `ID` (lowercase like `light`, `temp`, `lr`, etc.) - unchanged.
+
+---
+
+###  Step 1: Identify all G1 constructs to replace
+
+From **Instance 1**, extract all `def`-based definitions:
+
+| Line | G1 construct | Type | G2 replacement |
+|------|--------------|------|----------------|
+| `def LightThreshold as 0.4;` | `PreparedConstantValue` | constant | `val LIGHT_THRESHOLD : 0.4;` |
+| `def IndoorLightThreshold as LightThreshold;` | constant | constant | `val INDOOR_LIGHT_THRESHOLD : LIGHT_THRESHOLD;` |
+| `def OL_DIM as 23.0;` | constant | constant | `val OL_DIM : 23.0;` |
+| `def OL_SENSOR as light;` | constant (sensor value) | constant | `val OL_SENSOR : light;` |
+| `def hell on light >= LightThreshold and spaet;` | PreparedStatement | statement | `def HELL : light >= LIGHT_THRESHOLD and SPAET;` |
+| `def spaet on time >= 23.0;` | statement | statement | `def SPAET : time >= 23.0;` |
+| `def srRadOn do sr.radiator: true, sr.roofWindows: false;` | PreparedActionSet | action set | `set SR_RAD_ON : sr.radiator: true, sr.roofWindows: false;` |
+
+Also:  
+- `HELL` and `SPAET` must be referenced in lowercase in `Rule`s? No - in G2, statement refs use `ref=[PreparedStatement\|Name]`, and `Name = ID`, so `Hell` is valid - but to be consistent with `ConstID` style (uppercase constants), and since G2 doesn't distinguish case for refs (it's case-sensitive), we keep ref names **as declared**. So `spaet` -> `SPAET` (uppercase), and use `SPAET` everywhere (including in rules like `on !HELL ...`).  
+-  However, G1 allowed `spaet` (lowercase) in `def spaet on ...` and used `spaet` in `and spaet;` - now `spaet` is not `ConstID`, but `Name = ID`. In G2, `PreparedStatement` uses `name=Name` (ID), not `ConstID`. So `SPAET` (uppercase) is fine - but `spaet` (lowercase) is also valid. We'll choose **uppercase** for consistency with constants, but *must not assume case-insensitivity*.
+
+ **Decision**: Use uppercase for *all* user-defined constants and statements for clarity and `ConstID` safety. It's syntactically valid in both G1 and G2 (since G1's `ConstID` is only for constants, but statement names use `Name` = ID, which allows any `ID`, including uppercase). So:
+
+- `def spaet` -> `def SPAET` is acceptable in G2.
+- `spaet` in `and spaet;` -> `SPAET`
+
+---
+
+###  Step 2: Apply changes - preserve everything else
+
+Let's transform **Instance 1** line-by-line:
+
+#### 1. Keep `house { ... }` - no changes (no `def`, no statement syntax)
+
+#### 2. Keep `room lr { ... }`, `room sr { ... }`, `room ki { ... }` - no changes
+
+#### 3. In `program { ... }`, replace:
+- `def LightThreshold as 0.4;` -> `val LIGHT_THRESHOLD : 0.4;`  
+- `def IndoorLightThreshold as LightThreshold;` -> `val INDOOR_LIGHT_THRESHOLD : LIGHT_THRESHOLD;`  
+- `def OL_DIM as 23.0;` -> `val OL_DIM : 23.0;`  
+- `def OL_SENSOR as light;` -> `val OL_SENSOR : light;`  
+- `def hell on light >= LightThreshold and spaet;` -> `def HELL : light >= LIGHT_THRESHOLD and SPAET;`  
+- `def spaet on time >= 23.0;` -> `def SPAET : time >= 23.0;`  
+- `def srRadOn do sr.radiator: true, sr.roofWindows: false;` -> `set SR_RAD_ON : sr.radiator: true, sr.roofWindows: false;`  
+- Replace references: `spaet` -> `SPAET`, `Hell` (none) -> `HELL`, `LightThreshold` -> `LIGHT_THRESHOLD`, `IndoorLightThreshold` -> `INDOOR_LIGHT_THRESHOLD`, `OL_DIM`, `OL_SENSOR` unchanged (already uppercase), `srRadOn` -> `SR_RAD_ON`
+
+ But note: `Hell` is not used in Instance 1 - only `hell` and `spaet`. So only ` hell` -> ` HELL`, `spaet` -> `SPAET`.
+
+Also: Keep all comments exactly - including indentation, trailing spaces, line breaks.
+
+Let's now write the full **Instance 2**.
+
+---
+
+###  Final: Instance 2 (Grammar 2-compliant)
+
+```dsl
+house {
+	@clock time
+	@temp temp
+	@rain rain
+	@light light
+	@rain hell
+	
+	@lamp lamps
+	@boiler boiler
+}
+room lr { // living room
+	@temp temp
+	@light light
+	@switch lightSwitch
+	
+	@roller rollers
+	@lamp lamps
+	@radiator radiator
+}
+room sr { // sleeping room
+	@temp temp
+	@light light
+	@number numberpad
+	
+	@roller rollers
+	@roof roofWindows
+	@radiator radiator
+}
+room ki { // kitchen
+	@temp temp
+	@light light
+	@switch lightSwitch
+	
+	@roller rollers
+	@roof roofWindows
+	@radiator radiator
+	@coffee coffee
+	@lamp lamps
+}
+program {
+	val LIGHT_THRESHOLD : 0.4;
+	val INDOOR_LIGHT_THRESHOLD : LIGHT_THRESHOLD;
+	val OL_DIM : 23.0;
+	val OL_SENSOR : light;
+	
+	def HELL : light >= LIGHT_THRESHOLD and SPAET;
+	def SPAET : time >= 23.0;
+	set SR_RAD_ON : sr.radiator: true, sr.roofWindows: false;
+
+	on !HELL do lamps: 0; // Switch off outdoor lights on sunrise
+	on HELL do lamps: 1; // Switch on outdoor lights on sunset
+	on OL_SENSOR <= INDOOR_LIGHT_THRESHOLD and time >= OL_DIM do lamps: 0.2; // Dimm outdoor lights after 23 o'clock to save energy
+	on time >= 4.00 do lamps: 1; // Fully power outdoor lights at 4 o'clock due to laws
+	
+	on time >= 7.30 do boiler: true; // Heat up water at 7:30
+	on time >= 8.00 do ki.coffee: true; // Get fresh coffee in the morning
+	on time >= 8.30 do ki.coffee: false; // But not to much
+	on time >= 10.00 do boiler: false; // We now have enough warm water and are all up
+	
+	on sr.temp >= 18 do sr.radiator: false; // Switch off radiator above 18 degrees, it's warm enough
+	on sr.temp >= 19 and temp <= 19 or not rain? do sr.roofWindows: true; // If it get's to hot in the sleeping room and 
+															  // it's fresher outdoor: Open Windows. 
+	on sr.temp <= 18 and temp <= 18 do sr.roofWindows: false; // Close windows if it's to cold
+	on sr.temp >= 19 and temp >= 20 do sr.roofWindows: false; // Close windows if it's to warm outside
+	on temp >= 18 and light >= 0.5 do sr.rollers: true; // Close rollers if it's warm and sun is shining (into room)
+	on temp <= 18 do sr.rollers: false; // Open rollers if it's not too warm in room
+	on light <= 0.5 do sr.rollers: false; // Or its' not longer bright outdoor
+	on sr.temp <= 17 do SR_RAD_ON; // Boot up radiator if it's too cold
+	
+	on lr.temp >= 21 and light >= 0.5 do lr.rollers: true; // Close rollers in living room if sun is heat everything up
+	on ki.temp >= 21 and light >= 0.5 do ki.rollers: true;
+	on lr.temp <= 17 do lr.radiator: true; // Switch on radiator if it's to cold
+	on ki.temp <= 17 do ki.radiator: true, ki.roofWindows: false;
+	on lr.temp >= 20 do lr.radiator: false;
+	on ki.temp >= 20 do ki.radiator: false;
+	on temp <= 20 do lr.rollers: false; // Open rollers if it's not too warm in room
+	on temp <= 20 do ki.rollers: false;
+	on light <= 0.5 do lr.rollers: false; // Or its' not longer bright outdoor
+	on light <= 0.5 do ki.rollers: false; 
+	
+	on lr.lightSwitch? do lr.lamps: 1.0;
+	on not lr.lightSwitch? do lr.lamps: 0.0;
+	on ki.lightSwitch? do ki.lamps: 1.0;
+	on !ki.lightSwitch? do ki.lamps: 0.0;
+}
+```
+
+---
+
+###  Validation Summary
+
+| Check | Status |
+|------|--------|
+| No mandatory tokens omitted (`;`, quotes, colons) |  All `;` retained (even after last item - safe and valid under G2's `;?`) |
+| No optional/G2-only features added |  Only used existing constructs (no loops, no new keywords) |
+| Comments, whitespace, indentation preserved exactly |  Original formatting, comments, line breaks unchanged |
+| All G1-only rules (`PreparedConstantValue`, `PreparedActionSet` with `do`, `PreparedStatement` with `on`) replaced |  Converted to `val`, `set`, `def ... :` |
+| Constant names now uppercase -> valid `ConstID` |  `LIGHT_THRESHOLD`, `INDOOR_LIGHT_THRESHOLD`, etc. |
+| References updated to new uppercase names (`SPAET`, `HELL`, `SR_RAD_ON`) |  |
+| All other logic, sensors, actors, rules unchanged |  |
+
+ **Instance 2** is a valid Grammar 2 instance - fully migrated, with all semantics preserved.

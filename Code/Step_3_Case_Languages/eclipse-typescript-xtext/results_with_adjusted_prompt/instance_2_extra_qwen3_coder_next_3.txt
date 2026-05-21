@@ -1,0 +1,270 @@
+Let's carefully compare **Grammar 1** and **Grammar 2**, then apply only the *necessary and permitted* changes to **Instance 1** to produce **Instance 2**, following your 5 constraints strictly.
+
+---
+
+###  Key Grammar Changes (Grammar 1 -> Grammar 2)
+
+####  **Added**
+- `DocComment`, `AnnotationLine`, `DOC_COMMENT_*` terminals/rules  
+  -> **Optional**, so per Constraint #2: **do not add** doc comments unless already present ( Instance 1 has none -> keep none)
+- `InterfacesAndClasses` rule (composite container for modules + declarations)  
+  -> This is *not* user-facing syntax - it's an internal AST helper. No surface syntax change.
+- `Declaration` and `InterfaceOrClassDeclaration` as rules  
+  -> Again, *no surface syntax change* - still uses `interface`, `class`, etc.
+
+####  **Deleted / Replaced**
+| Grammar 1 construct | Grammar 2 status | Action per Constraint #4 |
+|---------------------|------------------|--------------------------|
+| `Typescript: imports+=ImportDeclaration* interfacesAndClasses += (InterfaceDeclaration \| ClassDeclaration \| ModuleDeclaration)*` | Replaced by `Typescript: imports+=ImportDeclaration* interfacesAndClasses=InterfacesAndClasses` (with internal `Declaration` wrapper) | **No change needed** - syntactically identical; `interface`, `class`, `module` still valid top-level. |
+| `InterfaceDeclaration` and `ClassDeclaration` were *directly* in `Typescript` and `ModuleElement` | Still present, but now *wrapped* via `Declaration` and `InterfaceOrClassDeclaration` | **No change to syntax** - the surface remains `"interface"`, `"class"` etc. |
+| **Critical**: In Grammar 1, `InterfaceDeclaration` had:  
+`"interface" name=Identifier extendClause=InterfaceExtendsClause? objectType=ObjectType`  
+-> i.e., `extendClause` was **optional**, `objectType` was **required**  
+In Grammar 2, `InterfaceDeclaration` has:  
+`"interface" name=Identifier extendClause=InterfaceExtendsClause?`  
+-> **No `objectType` directly on `InterfaceDeclaration`**  
+-> Instead, `objectType=ObjectType` is now assigned on `InterfaceOrClassDeclaration`, which wraps `InterfaceDeclaration`.  
+ **This is structural only** - surface syntax unchanged. `interface X { ... }` still valid. |
+
+####  **Deleted Rules / Constructs (IMPORTANT)**
+Let's verify what's **removed** from the surface syntax.
+
+| Construct in Grammar 1 | Status in Grammar 2 | Evidence |
+|------------------------|---------------------|---------|
+| `ClassHeritage` | Deleted (commented out) | In `ClassDeclaration` comment says `/* TypeParameter ClassHeritage */` - no heritage support (extends/implements) |
+| `TypeParameters` (e.g., `<T>`) | Not in Grammar 2 | Both `InterfaceDeclaration` and `ClassDeclaration` lack type param syntax |
+| `MethodSignature`, `CallSignature`, `IndexSignature`, `ConstructSignature` | Still commented out in `TypeMember` | No change - still only `PropertySignature` supported |
+| **`VariableDeclaration`, `FunctionDeclaration`, `EnumDeclaration`** | Still commented out in `ModuleElement` | -> **Not removed**, just excluded (via `/* ... */`). So they're still *not allowed* - no new syntax added. |
+| **`export` in ModuleElement** | Still allowed (`exported?="export"?`) | No change |
+
+ **No mandatory syntax was removed or altered in a way that breaks Instance 1**.
+
+####  So Why would Instance 1 *not* parse under Grammar 2?
+Let's re-express Instance 1:
+
+```text
+module A { 
+ export interface X { s: string } 
+} 
+ 
+module B { 
+ /*var A = 1; */ 
+ import Y = A; 
+}
+```
+
+Compare to Grammar 2:
+
+- `ModuleBody: elements+=ModuleElement*;`
+- `ModuleElement: exported?="export"? moduleContent=( Declaration | ModuleDeclaration | ImportDeclaration ) ';'?;`
+- `Declaration: docComment=DocComment? declaration=InterfaceOrClassDeclaration;`
+- `InterfaceOrClassDeclaration: (InterfaceDeclaration | ClassDeclaration) objectType=ObjectType;`
+
+ So now `export interface X { ... }` must be parsed as:
+```
+ModuleElement:
+  exported? = true
+  moduleContent = Declaration
+    -> Declaration.declaration = InterfaceOrClassDeclaration
+      -> InterfaceOrClassDeclaration.declaration = InterfaceDeclaration
+        -> InterfaceDeclaration.objectType *is NOT present* (it's moved to InterfaceOrClassDeclaration)
+      -> InterfaceOrClassDeclaration.objectType = ObjectType (set on *this* node)
+```
+
+But in the source text, `objectType` (i.e., `{ s: string }`) still appears *immediately after the interface header*, unchanged.
+
+ **This means Instance 1 is *still valid* in Grammar 2**, *because*:
+- The text `interface X { s: string }` matches the syntax of `InterfaceDeclaration` + `ObjectType` **in the same order**
+- Grammar 2 assigns `objectType` *up the chain* to `InterfaceOrClassDeclaration`, but **no syntax change occurred**.
+
+So what *did* change? Only internal AST structure - **not syntax**.
+
+BUT - look again at **Grammar 2's `InterfaceDeclaration`**:
+
+```xtext
+InterfaceDeclaration:
+    "interface" name=Identifier /* TypeParameters? */ extendClause=InterfaceExtendsClause?;
+```
+
+ **Crucially: `objectType=ObjectType` is *no longer part of `InterfaceDeclaration`***.  
+Yet in Instance 1, the `{ s: string }` immediately follows the interface name.
+
+In Grammar 1, that `{...}` was attached to `InterfaceDeclaration.objectType`.  
+In Grammar 2, that `{...}` must be attached to `InterfaceOrClassDeclaration.objectType`, but the parser still expects the `{...}` to appear *right after the interface header* (since `InterfaceDeclaration` now has *no* attribute after it).
+
+So the surface syntax is identical - the `{` comes directly after `X`, so the parser can still consume it.  Valid.
+
+But wait - what about `ClassDeclaration`?
+
+```xtext
+ClassDeclaration:
+    "class" name=Identifier /* TypeParameter ClassHeritage */;
+```
+
+No `objectType=ObjectType` here either - but in Instance 1 there are *no classes*, so fine.
+
+So again: Instance 1 should parse unchanged.
+
+---
+
+###  BUT: There is one *critical* difference hidden in `InterfaceDeclaration` - **the `objectType` assignment is missing**.
+
+In Grammar 2, `InterfaceDeclaration` no longer has `objectType=ObjectType`, yet the `{ ... }` must still appear in text.
+
+Since `InterfaceOrClassDeclaration: (...) objectType=ObjectType`, the `ObjectType` is *still required*, but now assigned at a higher level.
+
+ So `interface X { s: string }` is still syntactically valid.
+
+BUT - let's check one more thing.
+
+Look at `ModuleElement` in Grammar 2:
+
+```xtext
+ModuleElement: 
+     exported?="export"? moduleContent=( Declaration | ModuleDeclaration | ImportDeclaration )
+     ';'?; 
+```
+
+In Grammar 1, `ModuleElement` allowed:
+```xtext
+moduleContent=( ClassDeclaration | InterfaceDeclaration | ModuleDeclaration | ImportDeclaration )
+```
+
+So in Grammar 2, `InterfaceDeclaration` is *no longer directly allowed* - it must be wrapped in `Declaration`.
+
+However - `Declaration` is defined as:
+```xtext
+Declaration:
+    docComment=DocComment? declaration=InterfaceOrClassDeclaration;
+```
+
+and `InterfaceOrClassDeclaration` *contains* `InterfaceDeclaration`.
+
+So `export interface X { s: string }` parses as:
+- `ModuleElement.exported = true`
+- `ModuleElement.moduleContent = Declaration`
+   - -> `Declaration.declaration = InterfaceOrClassDeclaration`
+      - -> `InterfaceOrClassDeclaration.declaration = InterfaceDeclaration`
+      - -> `InterfaceOrClassDeclaration.objectType = { s: string }`
+
+ All good.
+
+BUT here's the **subtle catch**:
+
+> **Constraint #4**: _When evolving the instance, pay special attention to grammar rules that have been deleted in the evolved grammar. If a grammar rule no longer exists in Grammar 2, you must remove all instances of that rule from the evolved instance._
+
+What has been *deleted* (i.e., removed entirely, not just moved/wrapped)?
+
+- `InterfaceDeclaration` and `ClassDeclaration` still exist - they're *not deleted*, just now nested under `InterfaceOrClassDeclaration`.
+- `ModuleElement` still accepts them - indirectly.
+
+So **nothing is syntactically removed** - just reorganized in AST.
+
+ **Instance 1 is unchanged in syntax**.
+
+---
+
+###  BUT: There is one small but critical issue:
+
+Grammar 1 allowed:
+```xtext
+InterfaceDeclaration:
+    "interface" name=Identifier /* TypeParameters? */ extendClause=InterfaceExtendsClause? objectType=ObjectType;
+```
+
+Grammar 2 changes it to:
+```xtext
+InterfaceDeclaration:
+    "interface" name=Identifier extendClause=InterfaceExtendsClause?;
+```
+
+Note the **removal of `objectType=ObjectType`** - meaning `InterfaceDeclaration` no longer has *any attribute* after its header.
+
+But in text, `interface X { s: string }` is still expected - so where does the `{...}` go?
+
+Answer: To `InterfaceOrClassDeclaration.objectType`.
+
+So the *syntax* remains `interface X { ... }` - no change.
+
+Thus, **no modification needed to Instance 1**.
+
+But wait - what if Grammar 2's parser *requires* an `objectType` *immediately after the declaration*?  
+Yes - and it still appears *right after* `X`, so it's fine.
+
+So **Instance 1 is already valid under Grammar 2**.
+
+---
+
+###  Why then the request to "modify instance_1 to get instance_2"?
+
+Possibly because in Grammar 2, the `ObjectType` is now on `InterfaceOrClassDeclaration`, and the grammar expects the **type body to be attached to the wrapper**, but the *surface text remains identical*.
+
+Unless - could there be an issue with **exporting inside modules**?
+
+In Grammar 1:
+```xtext
+ModuleElement: 
+     exported?="export"? moduleContent=( ClassDeclaration | InterfaceDeclaration | ... )
+```
+
+In Grammar 2:
+```xtext
+ModuleElement: 
+     exported?="export"? moduleContent=( Declaration | ModuleDeclaration | ImportDeclaration )
+```
+
+So now `export` can be applied only if `moduleContent` is a `Declaration` - which it is (`export interface X` -> `export` on `Declaration`).
+
+ Valid.
+
+---
+
+###  Final Verdict
+
+ **Instance 1 is syntactically identical to a valid Instance 2**.
+
+But per your instructions:
+- Do **not omit** any characters (including `{`, `}`, whitespace)
+- Do **not add** optional features (e.g., no doc comments)
+- Respect comments, whitespace, format
+
+So the only permitted evolution is **identity** - unless something is *invalid*.
+
+Let me double-check: Is there any syntactic violation in Instance 1 under Grammar 2?
+
+- `module A { export interface X { s: string } }`
+  - `module A { ... }` -> `ModuleDeclaration`
+  - `export interface X { s: string }`:
+    - Is this a `ModuleElement` with `moduleContent = Declaration`?
+      - Yes: `Declaration` -> `InterfaceOrClassDeclaration` -> `InterfaceDeclaration` + `objectType`
+
+- BUT -Grammar 2 defines `InterfaceOrClassDeclaration` as:
+
+```xtext
+InterfaceOrClassDeclaration: (InterfaceDeclaration | ClassDeclaration) objectType=ObjectType;
+```
+
+This means `InterfaceDeclaration` *must be immediately followed by `objectType=ObjectType`* - i.e., the `{...}`.
+
+In text: `interface X { s: string }` - yes, `{ s: string }` follows `X` -> valid.
+
+So: 
+
+---
+
+###  Final Answer
+
+Since no syntax changes were made (only internal AST refactoring), and Instance 1 contains no features that are *removed* or *restructured* (e.g., no doc comments, no `class` heritage, no type params), the **correctly evolved Instance 2 is identical to Instance 1**, preserving all whitespace, comments, and formatting.
+
+Here is **Instance 2**:
+
+```
+module A { 
+ export interface X { s: string } 
+} 
+ 
+module B { 
+ /*var A = 1; */ 
+ import Y = A; 
+}
+```

@@ -1,0 +1,218 @@
+Understood. Let me now **systematically transform Instance 1** (which conforms to **Grammar 1**) into **Instance 2**, which conforms to **Grammar 2**, using the differences we identified earlier.
+
+---
+
+###  Recap of Key Changes from Grammar 1 -> Grammar 2
+
+| Feature | Grammar 1 | Grammar 2 | Action for Instance 1 -> Instance 2 |
+|--------|-----------|-----------|-----------------------------------|
+| **Hyphenated keywords** (e.g., `'image-size'`) -> **camelCase** (`'imageSize'`) | Used |  Changed to camelCase | Replace all hyphenated keywords with camelCase equivalents |
+| **`'caffe-path'`** | **Required** (`'caffe-path' ASSIGN caffePath=STRING &`) | **Optional** (`('caffePath' ASSIGN ...)?`) | Keep it - no need to omit, since it *is* provided and allowed |
+| **`'type'` in `BranchBody`** | Present (`'type' REFERENCE type=BranchType`) |  **Removed** - only `'eltwiseOperation'` remains |  **Must delete `type -> residual` line** - otherwise invalid in Grammar 2 |
+| **`'final-layer'`** (as literal string) | Allowed in `LayerName` | Changed to `'finalLayer'` (no hyphen) | Replace `final-layer` -> `finalLayer` |
+| `BranchBody` structure | `'type'` + `'operation'` | Only `'eltwiseOperation'` | Remove `'operation'` as well? Wait - no: `'eltwiseOperation'` *is* new, but in Grammar 2, `BranchBody` is:  
+`'eltwiseOperation' REFERENCE operation=OperationType`  
+-> So `'operation'` is now just `'eltwiseOperation'` - i.e., we must rename `operation -> PROD` to `eltwiseOperation -> PROD` |
+
+Let's verify Grammar 2's `BranchBody` rule:
+```xtext
+BranchBody:
+    'eltwiseOperation' REFERENCE operation=OperationType
+;
+```
+-> So **both** `'type'` **and** `'operation'` from Grammar 1 are gone - replaced by a **single** field `'eltwiseOperation'`.
+
+ Important: In Grammar 1, `branchBody` had:
+```xtext
+'eltwiseOperation' REFERENCE operation=OperationType   //  NOT PRESENT in Grammar 1!
+'type' REFERENCE type=BranchType
+```
+Wait - correction: **Grammar 1 had `'operation'` and `'type'`**, but **Grammar 2 has only `'eltwiseOperation'`**.
+
+So in Instance 1, the `branch` block was:
+```
+branch (name: "b1" in:"c3" out:32) {
+    operation -> PROD
+    type -> residual
+
+    conv (name: "bc1"      out:32) { ... }
+    ...
+}
+```
+
+-> We must:
+- Remove `type -> residual`
+- Replace `operation -> PROD` -> `eltwiseOperation -> PROD`
+
+Also:  
+ `operation` enum is unchanged (`OperationType: PROD | SUM`) - only the *keyword* changed.
+
+---
+
+###  Other Required Renames (Hyphen -> CamelCase)
+
+| Grammar 1 Keyword | Grammar 2 Keyword | Replacement in Instance |
+|-------------------|-------------------|-------------------------|
+| `batch-size` | `batchSize` |  |
+| `image-size` | `imageSize` |  |
+| `image-channels` | `imageChannels` |  |
+| `train-data-path` | `trainDataPath` | Not used in Instance 1, but if present -> rename |
+| `val-data-path` | `valDataPath` | Not used |
+| `caffe-path` | `caffePath` |  |
+| `output-path` | `outputPath` |  |
+| `kernel-size` | `kernelSize` |  |
+| `use-bias-term` | `useBiasTerm` |  |
+| `use-global-stats` | `useGlobalStats` |  |
+| `final-layer` (in layer name) | `finalLayer` |  |
+
+---
+
+###  Now: Transform Instance 1 -> Instance 2
+
+#### Start with Instance 1:
+```instance1
+network "DemoNet" {
+	epochs = 10
+	batch-size = 50
+	image-size = 28
+    image-channels = 1
+    output-labels = 10
+
+    caffe-path = "$CAFFE_HOME"
+    output-path = "/media/xpitfire/data/temp"
+
+	updater -> sgd
+	learningRate = 0.003
+
+	conv   (name: "c1" in:data out:64)     { kernel-size = 6 }
+    conv   (name: "c2" 		   out:32)     { kernel-size = 3 }
+	conv   (name: "c3"         out:32)     { kernel-size = 1 }
+
+	branch (name: "b1" in:"c3" out:32)     {
+		operation -> PROD
+		type -> residual
+
+		conv (name: "bc1"      out:32)     { kernel-size = 1 }
+		norm (name: "bn1")				   { use-global-stats = true }
+		scale(name: "bs1") 				   { use-bias-term = true }
+	}
+
+	pool   (name: "p1"         out:3)      { type -> MAX, stride = 1 }
+
+	dense [(name: "d1"         out:512), 
+	       (name: "d2"         out:256)]
+
+	dense  (name: final-layer  out:labels)
+}
+```
+
+#### Step-by-step edits:
+1. Replace hyphenated keywords:
+   - `batch-size` -> `batchSize`
+   - `image-size` -> `imageSize`
+   - `image-channels` -> `imageChannels`
+   - `caffe-path` -> `caffePath`
+   - `output-path` -> `outputPath`
+   - `kernel-size` -> `kernelSize`
+   - `use-global-stats` -> `useGlobalStats`
+   - `use-bias-term` -> `useBiasTerm`
+
+2. Update `branch` block:
+   - Remove `type -> residual`
+   - Rename `operation -> PROD` -> `eltwiseOperation -> PROD`
+
+3. Update `final-layer` -> `finalLayer`
+
+4. Preserve **exact whitespace, indentation, and layout** (e.g., tabs, alignment, newlines) - just change keywords/names.
+
+ Note: In the original `pool` layer:  
+`{ type -> MAX, stride = 1 }`  
+-> `'type' REFERENCE poolingType=PoolingType` still exists in `PoolLayerBody` in Grammar 2 (unchanged), so this is fine.
+
+---
+
+###  Final Instance 2 (Grammar 2-compliant)
+
+```instance2
+network "DemoNet" {
+	epochs = 10
+	batchSize = 50
+	imageSize = 28
+    imageChannels = 1
+    outputLabels = 10
+
+    caffeinePath = "$CAFFE_HOME"
+    outputPath = "/media/xpitfire/data/temp"
+
+	updater -> sgd
+	learningRate = 0.003
+
+	conv   (name: "c1" in:data out:64)     { kernelSize = 6 }
+    conv   (name: "c2" 		   out:32)     { kernelSize = 3 }
+	conv   (name: "c3"         out:32)     { kernelSize = 1 }
+
+	branch (name: "b1" in:"c3" out:32)     {
+		eltwiseOperation -> PROD
+
+		conv (name: "bc1"      out:32)     { kernelSize = 1 }
+		norm (name: "bn1")				   { useGlobalStats = true }
+		scale(name: "bs1") 				   { useBiasTerm = true }
+	}
+
+	pool   (name: "p1"         out:3)      { type -> MAX, stride = 1 }
+
+	dense [(name: "d1"         out:512), 
+	       (name: "d2"         out:256)]
+
+	dense  (name: finalLayer  out:labels)
+}
+```
+
+Wait - I just caught a typo:  
+ `caffeinePath` - should be `caffePath`, not `caffeinePath`. Let me fix it.
+
+Also: **double-check whitespace alignment** - preserved tabs/spaces from original (e.g., `c2` has weird spacing, but we keep it exactly as in Instance 1).
+
+ Final corrected version:
+
+```instance2
+network "DemoNet" {
+	epochs = 10
+	batchSize = 50
+	imageSize = 28
+    imageChannels = 1
+    outputLabels = 10
+
+    caffePath = "$CAFFE_HOME"
+    outputPath = "/media/xpitfire/data/temp"
+
+	updater -> sgd
+	learningRate = 0.003
+
+	conv   (name: "c1" in:data out:64)     { kernelSize = 6 }
+    conv   (name: "c2" 		   out:32)     { kernelSize = 3 }
+	conv   (name: "c3"         out:32)     { kernelSize = 1 }
+
+	branch (name: "b1" in:"c3" out:32)     {
+		eltwiseOperation -> PROD
+
+		conv (name: "bc1"      out:32)     { kernelSize = 1 }
+		norm (name: "bn1")				   { useGlobalStats = true }
+		scale(name: "bs1") 				   { useBiasTerm = true }
+	}
+
+	pool   (name: "p1"         out:3)      { type -> MAX, stride = 1 }
+
+	dense [(name: "d1"         out:512), 
+	       (name: "d2"         out:256)]
+
+	dense  (name: finalLayer  out:labels)
+}
+```
+
+ All mandatory quotes/keywords preserved, no optional new features added, no comments or layout added.  
+ All removed rules (`'type'` in `BranchBody`) fully elided.  
+ `final-layer` -> `finalLayer`.  
+ Hyphenated -> camelCase everywhere.
+
+This is **Instance 2**, fully conformant to **Grammar 2**.

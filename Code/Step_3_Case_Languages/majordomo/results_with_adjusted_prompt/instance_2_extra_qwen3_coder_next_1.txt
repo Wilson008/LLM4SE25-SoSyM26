@@ -1,0 +1,148 @@
+ **Task**: Transform **Instance 1** (Grammar 1) -> **Instance 2** (Grammar 2), *faithfully preserving all non-optional syntactic elements*, while adapting to all changes in Grammar 2.
+
+I'll walk through the transformation step-by-step, then give the final **Instance 2**.
+
+---
+
+###  Summary of Grammar Changes Affecting Instance Syntax (Grammar 1 -> Grammar 2)
+
+| Grammar 1 Rule | Grammar 2 Replacement | Transformation Required? |
+|----------------|------------------------|--------------------------|
+| `PreparedConstantValue: 'def' name=ConstID 'as' value=ValueExpression` | `PreparedValue: 'val' name=ConstID ':' value=ValueExpression` |  **Yes** - change `def X as Y` -> `val X : Y` |
+| `PreparedStatement: 'def' name=Name 'on' statement=Statement` | `PreparedStatement: 'def' name=Name ':' statement=Statement` |  **Yes** - change `def X on ...` -> `def X : ...` |
+| `PreparedActionSet: 'def' name=Name 'do' actions+=Action ...` | `PreparedActionSet: 'set' name=Name ':' actions+=Action ...` |  **Yes** - change `def X do ...` -> `set X : ...` |
+| `ConstantValueReference: ref=[PreparedConstantValue\|ConstID]` | `ValueReference: ref=[PreparedValue\|ConstID]` |  Only renaming of type - but the *syntax* for referencing (`ConstID`) remains unchanged. So `IndoorLightThreshold` still written as identifier (no change needed). |
+| Semicolons in `house {}` / `room {}` are now optional (`';'?`) |  No change needed - we can *keep* existing semicolons (Grammar 2 allows them), but to preserve instance format strictly, we'll **retain original semicolons** only where Grammar 1 required them (e.g., `program {}`). |
+| Semicolons in `program {}` body now optional (`'?'`) |  Keep existing semicolons to preserve original structure - Instance 1 used semicolons everywhere, so retain them. |
+| `SensorValue` no longer references `BooleanSensor` explicitly (via `BooleanSensorStatement`) |  No change - `BooleanSensorStatement` syntax (`sensor?`) is unchanged. |
+| `ConstantValue` rule still exists (as literal `EFloat`) |  No change - literals like `0.4`, `23.0`, `18`, `4.00`, `7.30`, etc., stay. |
+
+ **Important**:  
+- **All comments must be preserved verbatim** (including indentation, alignment, multi-line comments).
+- **All whitespace, line breaks, and indentation (including tabs/spaces) must be preserved** - Instance 1 used 2-space indentation for `program {}` contents and aligned `//` comments - we'll keep this exactly.
+
+---
+
+###  Transformation Rules Applied
+
+| Original (Grammar 1) | New (Grammar 2) | Example from Instance 1 -> Instance 2 |
+|----------------------|-----------------|--------------------------------------|
+| `def X as Y;` | `val X : Y;` | `def LightThreshold as 0.4;` -> `val LightThreshold : 0.4;` |
+| `def X as Y;` with `Y = ConstID` (e.g., `LightThreshold`) | Still `val X : Y;` | `def IndoorLightThreshold as LightThreshold;` -> `val IndoorLightThreshold : LightThreshold;` |
+| `def X on S;` | `def X : S;` | `def hell on light >= LightThreshold and spaet;` -> `def hell : light >= LightThreshold and spaet;` |
+| `def X do A;` | `set X : A;` | `def srRadOn do sr.radiator: true, sr.roofWindows: false;` -> `set srRadOn : sr.radiator: true, sr.roofWindows: false;` |
+| Semicolons after `}` or inside blocks are *optional* in Grammar 2, but since Instance 1 uses them consistently (no trailing `;` before `}`), and we must not omit *mandatory* elements ( Grammar 1 requires `;` in program), we **retain all `;` after definitions**. |
+
+ **No changes to:**
+- Sensor declarations (`@light`, `@temp`, etc.)
+- Actor declarations (`@lamp`, `@boiler`, etc.)
+- `on <stmt> do <actions>` -> remains `on <stmt> do <actions>` (no change to `Rule`)
+- Action syntax (`actor: value`)
+- Boolean sensor syntax (`sensor?`, `!sensor?`, `not sensor?`)
+- `QualifiedName` usage (e.g., `sr.radiator`, `ki.coffee`)
+
+---
+
+###  Final Instance 2 (Grammar 2 Compliant)
+
+```text
+house {
+	@clock time
+	@temp temp
+	@rain rain
+	@light light
+	@rain hell
+	
+	@lamp lamps
+	@boiler boiler
+}
+room lr { // living room
+	@temp temp
+	@light light
+	@switch lightSwitch
+	
+	@roller rollers
+	@lamp lamps
+	@radiator radiator
+}
+room sr { // sleeping room
+	@temp temp
+	@light light
+	@number numberpad
+	
+	@roller rollers
+	@roof roofWindows
+	@radiator radiator
+}
+room ki { // kitchen
+	@temp temp
+	@light light
+	@switch lightSwitch
+	
+	@roller rollers
+	@roof roofWindows
+	@radiator radiator
+	@coffee coffee
+	@lamp lamps
+}
+program {
+	val LightThreshold : 0.4;
+	val IndoorLightThreshold : LightThreshold;
+	val OL_DIM : 23.0;
+	val OL_SENSOR : light;
+	
+	def hell : light >= LightThreshold and spaet;
+	def spaet : time >= 23.0;
+	set srRadOn : sr.radiator: true, sr.roofWindows: false;
+
+	on !hell do lamps: 0; // Switch off outdoor lights on sunrise
+	on hell do lamps: 1; // Switch on outdoor lights on sunset
+	on OL_SENSOR <= IndoorLightThreshold and time >= OL_DIM do lamps: 0.2; // Dimm outdoor lights after 23 o'clock to save energy
+	on time >= 4.00 do lamps: 1; // Fully power outdoor lights at 4 o'clock due to laws
+	
+	on time >= 7.30 do boiler: true; // Heat up water at 7:30
+	on time >= 8.00 do ki.coffee: true; // Get fresh coffee in the morning
+	on time >= 8.30 do ki.coffee: false; // But not to much
+	on time >= 10.00 do boiler: false; // We now have enough warm water and are all up
+	
+	on sr.temp >= 18 do sr.radiator: false; // Switch off radiator above 18 degrees, it's warm enough
+	on sr.temp >= 19 and temp <= 19 or not rain? do sr.roofWindows: true; // If it get's to hot in the sleeping room and 
+															  // it's fresher outdoor: Open Windows. 
+	on sr.temp <= 18 and temp <= 18 do sr.roofWindows: false; // Close windows if it's to cold
+	on sr.temp >= 19 and temp >= 20 do sr.roofWindows: false; // Close windows if it's to warm outside
+	on temp >= 18 and light >= 0.5 do sr.rollers: true; // Close rollers if it's warm and sun is shining (into room)
+	on temp <= 18 do sr.rollers: false; // Open rollers if it's not too warm in room
+	on light <= 0.5 do sr.rollers: false; // Or its' not longer bright outdoor
+	on sr.temp <= 17 do srRadOn; // Boot up radiator if it's too cold
+	
+	on lr.temp >= 21 and light >= 0.5 do lr.rollers: true; // Close rollers in living room if sun is heat everything up
+	on ki.temp >= 21 and light >= 0.5 do ki.rollers: true;
+	on lr.temp <= 17 do lr.radiator: true; // Switch on radiator if it's to cold
+	on ki.temp <= 17 do ki.radiator: true, ki.roofWindows: false;
+	on lr.temp >= 20 do lr.radiator: false;
+	on ki.temp >= 20 do ki.radiator: false;
+	on temp <= 20 do lr.rollers: false; // Open rollers if it's not too warm in room
+	on ki.temp <= 20 do ki.rollers: false;
+	on light <= 0.5 do lr.rollers: false; // Or its' not longer bright outdoor
+	on light <= 0.5 do ki.rollers: false; 
+	
+	on lr.lightSwitch? do lr.lamps: 1.0;
+	on not lr.lightSwitch? do lr.lamps: 0.0;
+	on ki.lightSwitch? do ki.lamps: 1.0;
+	on !ki.lightSwitch? do ki.lamps: 0.0;
+}
+```
+
+---
+
+ **Verification Checklist**:
+-  All `def ... as ...` -> `val ... : ...`
+-  All `def ... on ...` -> `def ... : ...`
+-  All `def ... do ...` -> `set ... : ...`
+-  All comments preserved verbatim (including multi-line alignment)
+-  All whitespace/indentation preserved (2-space, aligned `//` comments)
+-  All `on ... do ...` rules unchanged (Grammar 2 keeps `Rule` intact)
+-  No optional features added or omitted (e.g., no extra semicolons)
+-  `;` retained after *every* definition in `program {}` (as in Instance 1)
+
+This is the **exact textual transformation** required under Grammar 2, honoring all constraints.

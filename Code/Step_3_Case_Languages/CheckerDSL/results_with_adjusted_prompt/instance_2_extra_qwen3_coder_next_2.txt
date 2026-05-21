@@ -1,0 +1,268 @@
+Based on the detailed comparison of **Grammar 1 -> Grammar 2**, here are the *only* concrete syntactic changes that affect **Instance 1**, and need to be reflected in **Instance 2**:
+
+---
+
+###  **Changes That *Do Not* Affect Instance 1 (No Evolution Needed)**
+| Feature | Grammar 1 | Grammar 2 | Status in Instance 1 |
+|--------|-----------|-----------|----------------------|
+| `select(...)` syntax | `select(...)`, no range | `select(... ':' range?)` | Uses *old* syntax ->  compatible |
+| Array declaration syntax | `int[n] c` | Same (`[' sz+=CHK_NUMBER ']*`) |  Compatible |
+| `value { ... }` vs `sp { ... }` | `'value' '{' spValue=SpValue '}'` | `'sp' '{' spValue=SpValue '}'` | **Instance 1 does NOT use `value { }` at all** -> no change required |
+| `for` loops, `MR`, `followup`, `check` blocks | Same structure | Same structure |  Compatible |
+| `newtest='`'` (backtick on variables) | Present | Same |  Unchanged |
+
+---
+
+###  **Only One Potential Issue in Instance 1: `value { ... }`**
+- Grammar 1 *allows* `'value' '{' spValue=SpValue '}'` in `ChkVariableDeclaration`.
+- Grammar 2 *replaces it* with `'sp' '{' spValue=SpValue '}'`.
+- **BUT**: Instance 1 **does not use `value { ... }` anywhere** - no variable declaration includes a `value { }` block.
+
+ Confirmed:  
+Scanned Instance 1 - all `ChkVariableDeclaration`s are of the form:
+```text
+int tc (subtask 1 : 1..100)
+int[n] c (subtask 1 : 1..100)
+```
+No `value { ... }` or `sp { ... }` present.
+
+---
+
+###  Conclusion:  
+**Instance 1 is already valid under Grammar 2** - *except* that if it *had* used `value { ... }`, it would need to become `sp { ... }`.  
+But since it doesn't, **no textual modification is required** for syntactic compliance.
+
+However, per your instruction:  
+> *"modify instance_1 and get instance_2, which will follow grammar_2"*
+
+and to be *definitively safe* (in case future tools expect only Grammar 2 features), and to reflect that **Grammar 2 prefers `sp` over `value`** (even if unused), the *most conservative and evolution-aware* approach is:
+
+ **Replace any *implicit* potential for `value` by proactively using the new preferred keyword `sp` - but only where semantically meaningful.**  
+But since there is *no* special-value declaration, and adding one would violate **Rule 2** (do not instantiate optional/new features), we **must not add `sp { ... }`**.
+
+Thus, the *only* required transformation is:  
+ **Leave Instance 1 *unchanged* - but ensure no leftover `value` tokens exist (which it doesn't).**  
+So Instance 2 = Instance 1.
+
+BUT WAIT - one *subtle* difference in **`FormatVariable`**:
+
+####  Grammar 1:
+```xtext
+FormatExpression:
+  num = CHK_NUMBER '(' (var+=ValidID ('[' sz+=CHK_NUMBER ']')* ('<' (count+=CHK_NUMBER) '>')?
+    (',' var+=ValidID ... )*)? ')';
+```
+-> Variable in `FormatExpression` is `ValidID`, no array or prefix support.
+
+####  Grammar 2:
+```xtext
+FormatVariable:
+  fv=ChkVariable ('<' (count=CHK_NUMBER) '>')?;
+```
+-> Now uses `ChkVariable`, which *includes* prefixes (`in`, `out`, `ans`), backticks, arrays.
+
+ **Instance 1 uses `FormatExpression` in this style**:
+```text
+1 (tc)
+n (c[i],p[i],t[i])
+1 (point)
+1 (y<n>)
+```
+- In Grammar 1: `c[i]` is parsed as `ValidID = "c"`, then `'[i]'` as part of syntax - not via `ChkVariable`.
+- In Grammar 2: `c[i]` must be parsed as `ChkVariable` -> which supports `name = ValidID` + `['[' v+=CHK_NUMBER ']']*`.
+
+ `c[i]`, `p[i]`, `t[i]`, `y<n>` are compatible:  
+- `c[i]` -> `ChkVariable(var="c", v=["i"])`  
+- `y<n>` -> `ChkVariable(var="y", v=["n"])`  
+This matches `ChkVariable`'s pattern: `var=ValidID ('[' v+=CHK_NUMBER ']')*`.
+
+ So all `FormatExpression` usages in Instance 1 remain valid in Grammar 2.
+
+---
+
+###  Final Answer:  
+**Instance 2 is identical to Instance 1** - because:
+- No `value { ... }` -> no need to change to `sp { ... }`
+- No `select(... : range)` -> no need to extend
+- All format expressions and array usages are compatible
+- All other changes in Grammar 2 are *additive* or *optional*, not *breaking*
+
+Thus, per your instructions (preserve comments, whitespace, structure, no additions), here is **Instance 2**:
+
+```text
+// Specification untuk soal knapsack Polo the Penguin and the Test
+class Knapsack{
+	/*
+	 * variable declaration
+	 * akan digunakan untuk men-generate atribut private,
+	 * fungsi untuk membaca, menulis, dan validator variable tersebut
+	 */
+	
+	// variable untuk input
+	int tc (subtask 1 : 1..100) // tc is number of test cases
+	int n (subtask 1 : 1..100) // n is number of questions
+	int w (subtask 1 : 1..100) // w is time limit for study
+	int[n] c (subtask 1 : 1..100) // c[i] is the number of tests that will contain this question
+	int[n] p (subtask 1 : 1..100) // p[i] is the number of points that he will get for correctly answering this question on each of tests
+	int[n] t (subtask 1 : 1..100) // t[i] is the amount of time (in minutes) that he needs to spend to learn this question
+	
+	// variable untuk output
+	int point // point is maximal possible total number of points he can get for all tests if he studies for no more than W minutes
+	
+	// hidden variable (for mr only)
+	int[n] y (0..1) // y adalah nomor tempat knapsack item i atau 0 jika tidak dipilih
+	
+	score {
+		(1 : 100)
+	}
+	
+	/*
+	 * input format
+	 */
+	input {
+		1 (tc)
+		for (k,tc) {
+			1 (n,w) // 1 baris pertama berisi 2 buah integer n dan w
+			n (c[i],p[i],t[i]) // n baris berikutnya berisi 3 buah integer c,p,t
+		}
+	}
+	
+	/*
+	 * output format
+	 */
+	output {
+		1 (point) // 1 baris berikutnya berisi 1 buah integer point
+	}
+	
+	hidden {
+		1 (y<n>)
+	}
+	
+	MR 1 {
+		(select(k,l) where 1<=k and k<l and l<=n and c[k]!=c[l] or p[k]!=p[l] or t[k]!=t[l])
+		followup {
+			(c` = swap(c,k,l))
+			(p` = swap(p,k,l))
+			(t` = swap(t,k,l))
+		}
+		check {
+			
+		}
+		
+	}
+	
+	MR 3 {
+		(select(k) where y[k]==0)
+		(def cc = random(0..100))
+		followup {
+			(t`[k] = t[k]+cc)
+		}
+		check {
+			
+		}
+	}
+	
+	MR 4 {
+		(select(k) where y[k]==0)
+		(def cc = random(0..100))
+		followup {
+			(p`[k] = p[k]-cc)
+		}
+		check {
+			
+		}
+	}
+	
+	MR 5 {
+		(def c1 = sum(t) where y[i]==1)
+		followup {
+			(c`[1] = c1)
+		}
+		check {
+			
+		}
+	}
+	
+	MR 6 {
+		(def cnew = min(c) where y[i] != 0)
+		(def pnew = min(p) where y[i] != 0)
+		(def tnew = max(t) where y[i] != 0)
+		followup {
+			(n` = n+1)
+			(c` = add(c,cnew))
+			(p` = add(p,pnew))
+			(t` = add(t,tnew))
+		}
+		check {
+			
+		}
+	}
+	
+	MR 7 {
+		(select(k) where y[k]==0)
+		followup {
+			(n` = n-1)
+			(c` = remove(c,k))
+			(p` = remove(p,k))
+			(t` = remove(t,k))
+		}
+		check {
+			
+		}
+	}
+	
+	MR 8 {
+		(select(k) where y[k]==1)
+		followup {
+			(n` = n-1)
+			(c`[1] = c[1]-t[k])
+			(c` = remove(c,k))
+			(p` = remove(p,k))
+			(t` = remove(t,k))
+		}
+		check {
+			(point` = point-p[k]*c[k])
+		}
+	}
+	
+	MR 9 {
+		(select(k,l) where 1<=k and k<l and l<=n and y[k]==1 and y[l]==1)
+		followup {
+			(c`[k] = 1)
+			(p`[k] = c[k]*p[k]+c[l]*p[l])
+			(t`[k] = t[k]+t[l])
+			(n` = n-1)
+			(c` = remove(c,l))
+			(p` = remove(p,l))
+			(t` = remove(t,l))
+		}
+		check {
+			
+		}
+	}
+	
+	MR 11 {
+		(select(k) where y[k]==1)
+		(def cc = random(0..100))
+		followup {
+			(p`[k] = p[k]+cc)
+		}
+		check {
+			(point` = point+cc*c[k])
+		}
+	}
+	
+	MR 12 {
+		(select(k) where y[k]==1)
+		(def cc = random(0..100))
+		followup {
+			(c`[k] = c[k]+cc)
+		}
+		check {
+			(point` = point+cc*p[k])
+		}
+	}
+}
+``` 
+
+ This is a **syntactically valid instance of Grammar 2**, preserving 100% of Instance 1's content, comments, formatting, and semantics.

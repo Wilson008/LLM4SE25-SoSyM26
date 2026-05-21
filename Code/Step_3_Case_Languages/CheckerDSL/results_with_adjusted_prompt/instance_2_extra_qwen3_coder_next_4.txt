@@ -1,0 +1,306 @@
+Understood. I'll now transform **Instance 1** ( Grammar 1 - compliant) into **Instance 2** (Grammar 2 - compliant), strictly respecting:
+
+ All **mandatory syntax** (e.g., `score`, `MR`, `{`, `}`, keywords),  
+ No omission of essential elements (comments, whitespace preserved),  
+ No instantiation of *new optional/alternative* features introduced in Grammar 2 (e.g., `select` with `: range`),  
+ Removal of *deprecated constructs* that were valid in Grammar 1 but **no longer exist in Grammar 2**,  
+ Faithful reproduction of formatting (indentation, blank lines, comments, etc.).
+
+---
+
+###  Recap of Critical Differences Between Grammar 1 -> Grammar 2
+
+| # | Change | Grammar 1 | Grammar 2 | Consequence for Instance Transformation |
+|---|--------|-----------|-----------|-----------------------------------------|
+| 1 | Fixed-value keyword | `'value'` | `'sp'` | Replace all `'value'` with `'sp'` (but Instance 1 has **none** -> no change) |
+| 2 | `ChkVariableDeclaration` array syntax | `('[' (sz+=CHK_NUMBER)? ']')*` -> optional size | `('[' sz+=CHK_NUMBER ']')*` -> **required size** | If any array decl lacks `[N]` (e.g., `int[n]` is okay, but `int[]` would fail) - Instance 1 uses `int[n]`, so  OK |
+| 3 | `Helper.select` | `select(...vars...)` (no range) | `select(...vars... ':' range)` | **Instance 1 uses `select(k,l)`, `select(k)` - no `: range`**, so safe  |
+| 4 | `FormatVariable` | `var+=ValidID ('[' sz+=CHK_NUMBER ']')* ('<' count '>')?` | `fv=ChkVariable ('<' count '>')?` -> **`var` must now be `ChkVariable`**, i.e., may include prefix, backtick, indices, etc. | Instance 1 uses simple `var+=ValidID` like `(tc)`, `(n,w)`, `(c[i],p[i],t[i])`, `(y<n>)` - all match `ChkVariable` (no prefix/backtick), so  still valid |
+| 5 | `ChkVariableDeclaration` limit syntax | `'(' limit1=Limit (';' limit+=Limit)* ')'` | `'(' limit1=Limit (';' limit+=Limit)* ')'` | **No change** |
+| 6 | **GARDED DELETION**: In Grammar 2, `Limit` still exists, but **`CHK_ELEMENT` definition unchanged** - no grammar rule was *deleted* entirely; however, `spValue=SpValue` was renamed from `'value'` to `'sp'` - but again, Instance 1 has no `value` blocks. |
+
+>  **Crucial**: The **only required change** is if any part relied on deprecated constructs - and there is **one subtle but critical issue**:
+
+### Critical Issue: `Limit` in Instance 1 Uses `'subtask N :'` *inside parentheses*, but Grammar 2's `Limit` rule is unchanged - still valid   
+However, Grammar 2's `FormatExpression` changed as follows:
+
+| Rule | Grammar 1 | Grammar 2 |
+|------|-----------|-----------|
+| `FormatExpression.num` | `num = CHK_NUMBER '(' ... ')'` | Same |  |
+| `FormatExpression.var` | `(var+=ValidID ('[' sz+=CHK_NUMBER ']')* ('<' ... '>')?)*` | `(var+=FormatVariable ...)` where `FormatVariable: fv=ChkVariable ('<' ... '>')?` |  Still accepts `c[i]`, `p[i]`, `t[i]`, `y<n>` |
+
+BUT - here's the **only mandatory change** required:
+
+###  Change Required:
+- In Grammar 2, **`FormatExpression` now uses `FormatVariable`**, and `FormatVariable` is defined as:
+  ```xtext
+  FormatVariable:
+    fv=ChkVariable ('<' (count=CHK_NUMBER) '>')?;
+  ```
+- In Grammar 1, `FormatVariable` did **not exist** - `FormatExpression` used `ValidID` directly with optional indices and `<count>`.
+-  In Instance 1, all format variables like `c[i]`, `p[i]`, `t[i]`, `y<n>` **are fully compatible** with `ChkVariable`, since:
+  - `ChkVariable` = `(pref=ChkPrefix)? (var=ValidID) ((newtest='`')?) ('[' v+=CHK_NUMBER ']')*`
+  - So `c[i]` = `ValidID='c'` + `'[i]'` -> matches `ChkVariable`  
+  - `y<n>` = `ValidID='y'` + `'<' n '>'` -> matches `ChkVariable` + `('<' ... '>')?`
+
+ So no change needed for format expressions.
+
+###  Final Determination:
+- **There is NO syntactic incompatibility** between Instance 1 and Grammar 2.
+- Grammar 2 is **more restrictive on array sizes** (must be non-empty), but Instance 1 uses `int[n]`, `int[n]`, etc. - all with explicit `n`, so fine.
+- Grammar 2 **renamed `'value'` -> `'sp'`**, but Instance 1 has no `value` blocks.
+- All `Helper` usages (e.g., `select`) match Grammar 1 -> Grammar 2 (Grammar 2 just added an *optional* range to `select`, which Instance 1 does **not use**).
+- **No rule was deleted**, only extended.
+
+Therefore, **Instance 1 is already valid for Grammar 2**, and the *only* required transformation - per rule #4 (remove deprecated constructs) - is:
+
+>  Wait! **Grammar 2 still allows `subtask N :`**, but is there any usage of `subtask N :` outside `Limit`?  
+No. All are inside `Limit`, and `Limit` in both grammars accepts it.
+
+ **Double-check `ChkVariableDeclaration`**:  
+Grammar 2 removed the *optional* `sz` in `['[' sz+=CHK_NUMBER ']']*`, but Instance 1 uses:
+- `int[n] c (subtask 1 : 1..100)` -> `[n]` -> `sz=n` (non-empty) 
+- `int[n] p`, `int[n] t` -> same 
+
+ All valid.
+
+>  But - one **very subtle** point:  
+Grammar 1 had:  
+```xtext
+ChkVariableDeclaration:
+  type=ChkTypeReference (arr+='[' (sz+=CHK_NUMBER)? ']')* name=ValidID ...
+```
+This means `arr` would collect *all* `['[' ... ']'` - including `['[]'` (empty) if present.  
+Grammar 2 changed to:  
+```xtext
+ChkVariableDeclaration:
+  type=ChkTypeReference ('[' sz+=CHK_NUMBER ']')* name=ValidID ...
+```
+-> **Mandatory** `sz+=CHK_NUMBER` inside `[]`.
+
+ Instance 1 has `int[n]`, not `int[]`, so **no issue**.
+
+---
+
+###  Final Answer: Instance 2 = Instance 1 (with one *optional* cosmetic but harmless change per rule #1: ensure `'sp'` vs `'value'` - but since none exists, none needed)
+
+Wait - unless let's double-check:  
+Is there any hidden usage of `value`?  
+In Instance 1:  
+- No `value '{' ... '}'` found  
+- Only: `sp` not used -> but we don't need to add it; rule says: *do not add deprecated constructs* - only *remove* old ones.
+
+So:  
+ **Instance 1 is already valid for Grammar 2.**
+
+But per your instruction:  
+> *"Please modify instance_1 and get instance_2, which will follow grammar_2."*  
+-> and *"Never return an empty result."*
+
+So I will **return the exact same text**, as it is already Grammar 2-compliant - unless I missed a subtle incompatibility.
+
+Let me re-scan Instance 1 for any *hidden* `value` or deprecated pattern
+
+ Scan:
+- `value` appears **0 times** in Instance 1   
+- `array []` without size? No - all arrays have `[n]`, `[tc]`, etc.  
+  Wait: look at `int[n] c (subtask 1 : 1..100)` - `n` is `CHK_NUMBER` (identifier) 
+
+ Confirmed: Instance 1 is ** Grammar 2-compatible**.
+
+Therefore, **Instance 2 = Instance 1**, but to be *rigorously* compliant, I'll ensure:
+
+- All whitespace, comments, indentation, blank lines are **identical** - unchanged  
+- No additions, no deletions - copy exactly  
+- Even if trivial - per your requirement #3.
+
+---
+
+###  Final Instance 2 (Grammar 2-Compliant)
+
+```text
+// Specification untuk soal knapsack Polo the Penguin and the Test
+class Knapsack{
+	/*
+	 * variable declaration
+	 * akan digunakan untuk men-generate atribut private,
+	 * fungsi untuk membaca, menulis, dan validator variable tersebut
+	 */
+	
+	// variable untuk input
+	int tc (subtask 1 : 1..100) // tc is number of test cases
+	int n (subtask 1 : 1..100) // n is number of questions
+	int w (subtask 1 : 1..100) // w is time limit for study
+	int[n] c (subtask 1 : 1..100) // c[i] is the number of tests that will contain this question
+	int[n] p (subtask 1 : 1..100) // p[i] is the number of points that he will get for correctly answering this question on each of tests
+	int[n] t (subtask 1 : 1..100) // t[i] is the amount of time (in minutes) that he needs to spend to learn this question
+	
+	// variable untuk output
+	int point // point is maximal possible total number of points he can get for all tests if he studies for no more than W minutes
+	
+	// hidden variable (for mr only)
+	int[n] y (0..1) // y adalah nomor tempat knapsack item i atau 0 jika tidak dipilih
+	
+	score {
+		(1 : 100)
+	}
+	
+	/*
+	 * input format
+	 */
+	input {
+		1 (tc)
+		for (k,tc) {
+			1 (n,w) // 1 baris pertama berisi 2 buah integer n dan w
+			n (c[i],p[i],t[i]) // n baris berikutnya berisi 3 buah integer c,p,t
+		}
+	}
+	
+	/*
+	 * output format
+	 */
+	output {
+		1 (point) // 1 baris berikutnya berisi 1 buah integer point
+	}
+	
+	hidden {
+		1 (y<n>)
+	}
+	
+	MR 1 {
+		(select(k,l) where 1<=k and k<l and l<=n and c[k]!=c[l] or p[k]!=p[l] or t[k]!=t[l])
+		followup {
+			(c` = swap(c,k,l))
+			(p` = swap(p,k,l))
+			(t` = swap(t,k,l))
+		}
+		check {
+			
+		}
+		
+	}
+	
+	MR 3 {
+		(select(k) where y[k]==0)
+		(def cc = random(0..100))
+		followup {
+			(t`[k] = t[k]+cc)
+		}
+		check {
+			
+		}
+	}
+	
+	MR 4 {
+		(select(k) where y[k]==0)
+		(def cc = random(0..100))
+		followup {
+			(p`[k] = p[k]-cc)
+		}
+		check {
+			
+		}
+	}
+	
+	MR 5 {
+		(def c1 = sum(t) where y[i]==1)
+		followup {
+			(c`[1] = c1)
+		}
+		check {
+			
+		}
+	}
+	
+	MR 6 {
+		(def cnew = min(c) where y[i] != 0)
+		(def pnew = min(p) where y[i] != 0)
+		(def tnew = max(t) where y[i] != 0)
+		followup {
+			(n` = n+1)
+			(c` = add(c,cnew))
+			(p` = add(p,pnew))
+			(t` = add(t,tnew))
+		}
+		check {
+			
+		}
+	}
+	
+	MR 7 {
+		(select(k) where y[k]==0)
+		followup {
+			(n` = n-1)
+			(c` = remove(c,k))
+			(p` = remove(p,k))
+			(t` = remove(t,k))
+		}
+		check {
+			
+		}
+	}
+	
+	MR 8 {
+		(select(k) where y[k]==1)
+		followup {
+			(n` = n-1)
+			(c`[1] = c[1]-t[k])
+			(c` = remove(c,k))
+			(p` = remove(p,k))
+			(t` = remove(t,k))
+		}
+		check {
+			(point` = point-p[k]*c[k])
+		}
+	}
+	
+	MR 9 {
+		(select(k,l) where 1<=k and k<l and l<=n and y[k]==1 and y[l]==1)
+		followup {
+			(c`[k] = 1)
+			(p`[k] = c[k]*p[k]+c[l]*p[l])
+			(t`[k] = t[k]+t[l])
+			(n` = n-1)
+			(c` = remove(c,l))
+			(p` = remove(p,l))
+			(t` = remove(t,l))
+		}
+		check {
+			
+		}
+	}
+	
+	MR 11 {
+		(select(k) where y[k]==1)
+		(def cc = random(0..100))
+		followup {
+			(p`[k] = p[k]+cc)
+		}
+		check {
+			(point` = point+cc*c[k])
+		}
+	}
+	
+	MR 12 {
+		(select(k) where y[k]==1)
+		(def cc = random(0..100))
+		followup {
+			(c`[k] = c[k]+cc)
+		}
+		check {
+			(point` = point+cc*p[k])
+		}
+	}
+}
+```
+
+ This is a **faithful copy** of Instance 1 - and it is **fully valid for Grammar 2**, satisfying all constraints:
+
+- No mandatory keyword removed or altered  
+- No optional/new features (e.g., range in `select`) added  
+- All arrays have explicit sizes (`[n]`, not `[]`)  
+- No `value` -> no replacement needed  
+- Comments, indentation, spacing, blank lines preserved exactly  
+- `subtask N :` usage unchanged and still valid in `Limit`
+
+Let me know if you'd like a diff version or if you discover a hidden incompatibility!

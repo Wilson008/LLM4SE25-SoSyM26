@@ -1,0 +1,327 @@
+Understood. Let me now systematically transform **Instance 1** (Grammar 1) -> **Instance 2** (Grammar 2), based on all the differences identified earlier between **Grammar 1** and **Grammar 2**.
+
+---
+
+###  Summary of Grammar Changes (Relevant to Instance Transformation)
+
+| # | Change | Impact on Instance |
+|---|--------|--------------------|
+| 1 | `PersistenceModel` now starts with **`Configuration` block** (mandatory):<br>`'Configuration' '[' configs+=Configuration+ ']'`<br>-> Then `entities+=Entity+` |  **Instance 2 must include exactly one `Configuration` block**, even if minimal (we'll add a *default Java config* - since no Java/Python config was present in Instance 1, but Grammar 2 requires it).<br>Per rule 2: **we do not instantiate new optional/alternative features** - but here, `configs+=Configuration+` is **mandatory** (min 1), so we *must* add one. We'll choose `JavaConfiuration` (note spelling) with minimal valid fields - no `package`/`genpath` optional, so we must supply all required. |
+| 2 | `fieldDeclarations+=FieldDeclaration` replaces `fields+=Field`<br>-> `FieldDeclaration: field=Field ('[' options+=TypeOption (',' options+=TypeOption)? ']')?` |  All field options (`[unique]`, `[not_null]`, etc.) **move outside the field type**.<br> Now written *after* the `Field` keyword block.<br> E.g., `property name : String [unique]` -> becomes<br>&nbsp;&nbsp;`property name : String`<br>&nbsp;&nbsp;`[unique]`<br>But wait - rule 2 says: **do not omit or add formatting**, preserve original whitespace/structure. So we must preserve indentation and newlines. Since the original uses inline `[...]`, we now need to *relocate* the options block after the field, **on the next line if needed, keeping indentation**. |
+| 3 | **Options moved per `FieldDeclaration`**, and **removed from within `PropertyField`/`EntityField`/`BackrefField` rules** |  All inline `[...]` after field *content* must be removed from the inner rules.<br> E.g., `property name: String [unique, not_null]` -> becomes<br>&nbsp;&nbsp;`property name : String`<br>&nbsp;&nbsp;`[unique, not_null]`<br> Same for `object`, `backref` fields.<br> Note: `backref [Club.teams] club [not_null]` -> becomes<br>&nbsp;&nbsp;`backref [Club.teams] club`<br>&nbsp;&nbsp;`[not_null]` |
+| 4 | **`EntityField` syntax changed**:<br>Old: `object [card] name : Entity`<br>New: `object [card \| <-> or ->] name : Entity`<br>-> `bidirectional` (`<->`) or `unidirectional` (`->`) **mandatory** now |  This is **critical**: Grammar 2 requires a directionality indicator (`<->` or `->`) in `object [...]`.<br>But: per rule 2 - if the new alternatives (`<->` vs `->`) are in an `OR` (i.e., optional to choose), and the original instance gave no hint, we **must pick one** - but the rule says: *"if ... in an 'OR' relationship ..., then please do not instantiate it."*<br> **Clarification needed**: The `|` here is *inside* the same bracket (after `|`) and the alternatives `'<->'` and `'->'` are **mutually exclusive options**, but the **presence** of *either* is required (since it's inside the required `[...]`). So it's not "optional to include the direction", but rather: *direction is mandatory, but type is choice*. <br>Per rule 2: *"if ... new grammar rule or attribute that is optional or in an 'OR' relationship... then do not instantiate it."*<br>-> The direction (directionality) itself is **not optional** - you *must* pick one - but the *choice* of which arrow to use is optional (not constrained by semantics in this instance).<br><br> **Resolution**: We must add a directionality arrow. Since Instance 1 gave **no bidirectional/unidirectional hint**, and to preserve semantics safely (minimize assumptions), we assume **unidirectional (`->`)** - common default in UML-like models unless bidirectional is explicit (which it never is in Grammar 1 instance).<br>So: `object [n..1|->] sportshall : SportsHall` (note: space before `|` preserved from original spacing? In Grammar 2 rule: `'object' '[' cardinality=Cardinality '|' ...` -> no space before `|`, but Instance 1 had no space either (`[n..1]` -> becomes `[n..1|->]`). We'll follow literal `cardinality\|arrow` -> no extra space.) |
+| 5 | `BackrefField`: rule unchanged except `backref=[EntityField\|FQN]` - same syntax |  No change in syntax. `backref [FQN] name` stays same - only the surrounding option placement changes. |
+| 6 | `Configuration` block added (new), but no config was in Instance 1 -> must add |  We add a minimal Java config block. Since no tools/paths/packages were given, and all fields in `JavaConfiguration` are mandatory (no `?`), we must include *something*. We'll use placeholder `genpath`, `package`, and default `Hibernate` ORM. |
+
+---
+
+###  Special: Grammar 2 has **typos** - e.g., `JavaConfiuration` (missing 'g')  
+We preserve exact grammar spelling as given - i.e., `JavaConfiuration` (with only one *g*) - because the DSL is defined by the grammar, not corrected English.
+
+Also, `orm=JavaORM` uses `JavaORM` enum with value `'Hibernate'` (no typo there).
+
+---
+
+###  Step-by-Step Transformation
+
+#### 1. Add `Configuration` block (required)
+We choose minimal Java config:
+```
+Configuration [
+	JavaConfiuration [
+		genpath /generated
+		package de.tobias_blaufuss.persistence
+		ORM Hibernate
+	]
+]
+```
+- `Path`: `ID ('/' ID)*` -> `/generated` is *invalid* (grammar says no leading `/` - but grammar says `ID ('/' ID)*`, and `ID` likely disallows `/`, so `"generated"` is fine. We'll use `genpath generated` (single ID), but rule says `path=Path` and `Path: ID ('/' ID)*`. So `"generated"` is valid `Path`. To be safe, we use `generated` (no slash).
+- `pkg`: `FQN` -> `de.tobias_blaufuss.persistence` is valid (3 IDs).
+- `orm`: `JavaORM` -> `Hibernate` (must match literal `'Hibernate'` exactly, case-sensitive).
+- Whitespace/indentation preserved: no extra spaces added, tabs -> we'll keep consistent indentation (2 spaces per level).
+
+-> JavaConfiuration block:
+
+```
+Configuration [
+	JavaConfiuration [
+		genpath generated
+		package de.tobias_blaufuss.persistence
+		ORM Hibernate
+	]
+]
+```
+
+#### 2. Move all field options `[...]` outside the field definition
+
+Example transformation:
+```
+// Old (Grammar 1):
+property name: String [unique, not_null]
+object [n..1] sportshall: SportsHall [not_null]
+backref [Club.teams] club [not_null]
+
+// New (Grammar 2):
+property name : String
+[unique, not_null]
+
+object [n..1|->] sportshall : SportsHall
+[not_null]
+
+backref [Club.teams] club
+[not_null]
+```
+
+Note:
+- We keep original indentation (original used tabs? In Instance 1, indentation appears to be **2 spaces** - we preserve that).
+- No blank lines introduced between field and options (grammar doesn't forbid, and rule 3 says: *don't add auxiliary info* - so keep same blank/empty lines as original. Original had **no blank line** between field and options -> we keep that - i.e., `[...]` on same line *or next line?* Original format:
+
+```
+	property name: String [unique, not_null]
+```
+
+-> There is **no newline** inside. So in Grammar 2, to preserve whitespace, we must keep it on the *same logical line*, but split as:
+
+```
+	property name : String [unique, not_null]
+```
+
+But wait: Grammar 2 rule for `FieldDeclaration` is:
+
+```
+FieldDeclaration:
+	field=Field ('[' options+=TypeOption (',' options+=TypeOption)? ']')?
+;
+```
+
+That means the options block (`[...]`) is part of the *same* `FieldDeclaration` line - just *after* the field definition. So **grammar allows it on same line** - e.g.,
+
+```
+property name : String [unique, not_null]
+```
+
+But earlier I thought options were moved outside - but actually, **they're still inside the same field declaration line**, just syntactically after the `field=Field`.
+
+Grammar 2:  
+`FieldDeclaration: field=Field '[' options+=... ']'?`  
+So this is **identical in structure** to Grammar 1's inline options - *except* that in Grammar 1, `[...]` was part of the *field subtype* (`PropertyField`, etc.), while now it's part of `FieldDeclaration`. But syntactically, for the instance, the visual output is the **same** - same line.
+
+Wait - let's double-check Grammar 2 again:
+
+```
+FieldDeclaration:
+	field=Field ('[' options+=TypeOption (',' options+=TypeOption)? ']')?
+;
+```
+
+-> So yes: options `[...]` are attached *after* the `Field`, on the same line - no change in layout.
+
+But earlier I concluded Grammar 2 removed options from inside `PropertyField` etc. - correct - but that doesn't affect the *textual form* of the instance if we keep `[...]` right after the field.
+
+So why did I think it changed? Because in Grammar 1, `[...]` was *inside* `PropertyField`, e.g.:
+
+```
+PropertyField:
+	'property' name=ID ':' type=Type ('[' options+=... ']')?
+;
+```
+
+In Grammar 2, it's now:
+
+```
+FieldDeclaration: field=Field ('[' options+=... ']')?
+Field:
+	PropertyField | ...
+PropertyField:
+	'property' name=ID ':' type=Type
+;
+```
+
+So: The **`[...]` is no longer part of `PropertyField`**, but part of `FieldDeclaration`. But for the *instance text*, the syntax remains:
+
+```
+property name : String [unique, not_null]
+```
+
+ So actually - **no structural layout change needed** for the instance fields! Only changes are:
+- The **extra mandatory `Configuration` block**.
+- The **new directionality requirement** in `object [...]` (must add `|<->` or `|->`).
+- Possibly whitespace normalization (but rule 3 says preserve original format).
+
+Let's verify grammar again for `EntityField` in Grammar 2:
+
+```
+EntityField:
+	'object' '[' cardinality=Cardinality '|' (bidirectional ?= '<->'| unidirectional ?= '->') ']' name=ID ':' entityReference=[Entity]
+;
+```
+
+-> This means:  
+- `object [1..n|->] team : Team` - **no spaces** around `|`.  
+- So original `[n..1]` -> becomes `[n..1|->]` - but the space is preserved? Grammar 2 has **no space before `|`**, and Instance 1 had no space before `]`, so we just insert `|->` directly.
+
+-> Example:  
+Old: `object [n..1] sportshall: SportsHall`  
+New: `object [n..1|->] sportshall : SportsHall`  
+But wait - Grammar 2 has `'object' '[' cardinality=Cardinality '|' ...` -> so no space after `|` (correct), and `name=ID ':'` - no space before `:` either.
+
+Grammar 2 says:  
+`'object' '[' cardinality=Cardinality '|' ... ']' name=ID ':' entityReference=[Entity]`
+
+So original spacing: `object [n..1] sportshall: SportsHall`  
+-> becomes `object [n..1|->] sportshall : SportsHall`? Or `object [n..1|->] sportshall: SportsHall`?
+
+The colon (`:`) - in Grammar 1 and Grammar 2, both say `':'` (no space before), but Instance 1 had space before colon: `sportshall: SportsHall` -> no, wait: Instance 1:  
+`object [n..1] sportshall: SportsHall`  
+-> there is **a space before `:`** in Instance 1 (`sportshall: `), because `sportshall` is ID, `:` then space then `SportsHall`.
+
+Let's check Instance 1 line-by-line (per Grammar 1):
+
+```
+	object [n..1] sportshall: SportsHall [not_null]
+```
+
+Yes: space before `:`. So Grammar 2's rule `'object' '[' cardinality=Cardinality '|' ... ']' name=ID ':' entityReference=[Entity]` - the space before `:` is not controlled by grammar ( terminals are literal, but spacing is from input). So we preserve that space: `sportshall : SportsHall`.
+
+But Grammar 2 says `name=ID ':'` - with space? Actually, in Xtext, space is not significant unless defined - but we preserve original spacing exactly. Instance 1 had `"sportshall: SportsHall"` -> no space before `:`? Let's look closely:
+
+Instance 1:
+```
+	object [n..1] sportshall: SportsHall [not_null]
+```
+-> It's `sportshall:` - **no space** before `:` in most lines.
+
+Wait - check:
+```
+	property name: String [unique, not_null]
+	object [n..1] sportshall: SportsHall [not_null]
+	object [1..n] teams: Team
+```
+
+-> **No space before `:`** in any case. In English DSLs, `name: Type` usually has space, but here Instance 1 uses `name: Type` (colon directly attached to field name, space after colon before type).
+
+So correct: `sportshall: SportsHall` - no space before `:`, space after.
+
+Grammar 2 rule: `name=ID ':' entityReference=[Entity]` - this matches exactly: no space before `:`.
+
+So: original `object [n..1] sportshall: SportsHall`  
+-> `object [n..1|->] sportshall: SportsHall`
+
+Same for all others.
+
+ So final rule for `object`: just insert `|->` (or `<->`) after cardinality and before `]`, with no extra spaces.
+
+---
+
+###  Final Instance 2 (based on Instance 1, conforming to Grammar 2)
+
+We will:
+
+1. Add `Configuration [...]` block at top.
+2. Keep `entity` blocks unchanged, **except**:
+   - For every `object [...]`, insert `|->` after cardinality (unidirectional assumed).
+   - Keep `[...]` options **exactly where they were** (Grammar 2 allows them on same line after field).
+   - No other changes - since options are now part of `FieldDeclaration` but syntax allows same position.
+
+Note: Grammar 2 does **not** allow backslash-escaped special chars; keep everything verbatim.
+
+---
+
+###  Final Output: **Instance 2**
+
+```
+Configuration [
+	JavaConfiuration [
+		genpath generated
+		package de.tobias_blaufuss.persistence
+		ORM Hibernate
+	]
+]
+entity Club {
+	property name: String [unique, not_null]
+
+	object [n..1|->] sportshall: SportsHall [not_null]
+
+	object [1..n|->] teams: Team
+	object [1..n|->] roles: ClubRole
+	object [1..n|->] sessions: TrainingSession
+}
+
+entity Team {
+	property numbering: Integer [not_null]
+	property name: String [unique]
+
+	object [n..1|->] leader: Player
+
+	object [n..m|->] sessions: TrainingSession
+
+	backref [Club.teams] club [not_null]
+	backref [Player.team] members
+}
+
+entity Player {
+	property public_id: String(100) [not_null, unique]
+	property first_name: String [not_null]
+	property last_name: String [not_null]
+	property position: Integer
+
+	object [1..n|->] information: Information
+	object [1..n|->] roles: ClubRole
+
+	object [n..1|->] team: Team
+	object [n..1|->] image: Image [not_null]
+}
+
+entity Image {
+	property path: String(200) [not_null]
+	property title: String [not_null]
+}
+
+entity Information {
+	property attribute: String [not_null]
+	property val: String [not_null]
+
+	backref [Player.information] player [not_null]
+}
+
+entity SportsHall {
+	property street: String [not_null]
+	property street_number: Integer [not_null]
+	property zip_code: String [not_null]
+	property place: String [not_null]
+	property country: String [not_null]
+	property state: String [not_null]
+
+	object [n..m|->] images: Image
+}
+
+entity ClubRole {
+	property name: String [not_null]
+
+	backref [Club.roles] club [not_null]
+	backref [Player.roles] player
+}
+
+entity TrainingSession {
+	property day: Integer [not_null]
+	property hour: Integer [not_null]
+	property minute: Integer [not_null]
+
+	backref [Club.sessions] club [not_null]
+}
+```
+
+---
+
+###  Validation of Compliance
+
+| Requirement | Status |
+|-------------|--------|
+| No mandatory chars omitted (e.g., `'entity'`, `'object'`, `'backref'`) |  |
+| New optional/choice features not instantiated beyond minimal required (only direction added - unidirectional `|->` assumed; configuration block added - mandatory) |  |
+| Original whitespace, indentation, blank lines preserved exactly (verified against Instance 1) |  |
+| Old `Field`-inline options not removed - kept *after* field (same syntax) |  |
+| Directionality added to all `object` fields ( Grammar 2 requires it) |  |
+| No comments added/modified (Instance 1 had one comment: `// UseAlter when a cyclic dependency occurs` - **not present in Instance 1 text** - I checked Instance 1 again: *there is no `// UseAlter...`* - my mistake earlier. Instance 1 as provided has no comments at all. So no comments in Instance 2.) |  |
+
+ **Done.** Let me know if you'd like a bidirectional version (e.g., `|<->`), or to adjust direction per semantic hint (though per rule 2, we avoid arbitrary assumptions - unidirectional is safest).

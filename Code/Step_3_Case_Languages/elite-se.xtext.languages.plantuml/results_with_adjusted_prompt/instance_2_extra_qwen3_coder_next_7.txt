@@ -1,0 +1,111 @@
+Understood. Let's carefully evolve **Instance 1** (which follows **Grammar 1**) -> into **Instance 2**, which must be valid under **Grammar 2**.
+
+I'll walk through the key differences between **Grammar 1 -> Grammar 2**, identify which constructs are *no longer supported* or *syntactically altered*, and apply only **minimal, necessary changes** to Instance 1 - respecting all your constraints (no omitted quotes, no added/removed comments/whitespace, no unnecessary additions).
+
+---
+
+###  Recap of Key Differences That Affect Instance Syntax
+
+| Change | Grammar 1 | Grammar 2 | Consequence for Instance |
+|--------|-----------|-----------|--------------------------|
+| **`ML_COMMENT`** | `"/'" -> "'/"` (i.e., `/' ... '/`) | **Same!**  | No change needed. *My earlier concern was misplaced - `/' ... '/` **does** match `"/'" -> "'/"`* because:<br>- Opens: `/'` -> matches `"/'`<br>- Closes: `'/` -> matches `'/"` (i.e., `'` then `/`)<br> **Instance 1 is valid** - `/' ... '/` is correct in both grammars. |
+| **`PT_ParameterMap`** | Uses `[...]` (e.g., `[location : "dingolfing"]`) | Now uses `{...}` (e.g., `{location : "dingolfing"}`) |  **Mandatory change required** in all `request(...)` / `response(...)` parameter maps. |
+| **`SQ_Color` usage** | `COLOR` terminal used directly | Now uses `SQ_Color` (parser rule), but **terminals `HEXCOLOR`, `NAMEDCOLOR` are new** - `COLOR` terminal is *deleted* in G2 | No visible syntax change for users - colors still written as `#...` or `#name`. But note: `NAMEDCOLOR` terminal (`'#' [a-zA-Z]+`) now exists, e.g., `#blue` would be valid. |
+| **`SQ_Stereotype`** | Allows `(('(' char=ID ',' color=COLOR ')')? name=ID)` - `name` optional only if full pattern not used | **Same structure** - but `color=SQ_Color` (still supports hex/named) |  Instance's `<< (O, #eeaaaa) >>` -> needs a **trailing `name=ID`** per the rule, e.g., `<< (O, #eeaaaa) O >>` or just `<< O >>`. BUT: in Grammar 1 it was the same rule - so if Instance 1 worked with G1, then it *must* have had a `name` - but it doesn't! Let's double-check Grammar 1's rule: <br>```SQ_Stereotype: '<' '<' ( (('(' char=ID ',' color=COLOR ')')? name=ID) \| (('(' char=ID ',' color=COLOR ')')) ) '>' '>' ;```<br>-> The second alternative `(('(' char=ID ',' color=COLOR ')'))` **does NOT require `name`** - so `<< (O, #eeaaaa) >>` is allowed *only* via the **second branch** - which G2 also preserves (unchanged).  No change needed! |
+| **`SQ_Encompass`** | `SQ_EncompassBegin` + `SQ_EncompassEnd` (two separate rules) | Now unified into **single `SQ_Encompass`** rule |  Same syntax: `box ... end box` - no change. |
+| **Deleted rules**: none in this evolution - only refactoring/unification. `SQ_Group`, `SQ_Message`, etc., unchanged in shape. |
+| **`SQ_Delay`** | `description=SQ_Description '...'`? optional trailing `...` | Now `description=SQ_Description` - trailing `...` **removed** |  **Critical**: In G1: `'...' (wait=PT_Wait)? description=SQ_Description '...'` -> allowed trailing `...`. In G2: `'...' (wait=PT_Wait)? description=SQ_Description` - **no trailing `...`** allowed. So `... wait(10 s) Auf schnes Wetter ;) ...` must become `... wait(10 s) Auf schnes Wetter ;)`. |
+
+---
+
+###  Summary of Required Changes in Instance 1 -> Instance 2
+
+| # | Location in Instance 1 | Change Required | Reason |
+|---|------------------------|-----------------|--------|
+| 1 | In `request(...)` / `response(...)` parameter maps | `[...]` -> `{...}` | `PT_ParameterMap` changed from `[...]` to `{...}` in G2 |
+| 2 | `wait(...)` delay line | Remove **trailing `...`** after `SQ_Description` | `SQ_Delay` rule in G2 no longer allows `...` at end |
+| 3 | All other syntax (comments, stereotypes, colors, spacing, indentation, etc.) | **No change** | Compatible or unchanged in G2 |
+
+ **No mandatory elements omitted**, no new optional branches instantiated (since none added), whitespace/comments preserved.
+
+---
+
+###  Evolved Instance: **Instance 2 (Valid for Grammar 2)**
+
+```plantuml
+@startuml
+
+' Configuration
+header All Features PUML Diagram
+footer Seite %page%/%lastpage%
+skinparam roundcorner 25
+title TITEL =)
+hide footbox
+
+actor "Alice" << (O, #eeaaaa) >> #aF7
+
+autonumber 3 2
+[--> Alice : Externer Trigger
+activate Alice
+
+participant "Multiline\nBob" as Bob
+
+autoactivate on
+Alice -> Bob : start()
+
+== Initialization ==
+
+/'
+Multiline comment:
+Syntax bellow yields a 100 pixel high spacing :)
+'/
+||100||
+
+box "Cloud Services" #8877cc
+create control "CCC-Mock"
+Bob o-> "CCC-Mock" ++: request(POST, "/event/${location}", {location : "dingolfing"})
+... wait(10 s) Auf schnes Wetter ;) 
+end box
+return response(200||201, { event: "42" })
+
+"CCC-Mock" -> "CCC-Mock" : bootSkynet()
+
+== Hier wirds kritisch ==
+
+Bob<-[#0000aa]->Alice : Comunicacin muy importante
+
+ref over Alice, Bob: Hier hngt ein ref Kasten\nmit mehreren Zeilen Text\n
+
+== Schicksalskram ==
+
+alt robot takeover
+  Alice -[#ffaaaa]>x "CCC-Mock" !! : Sie wurden soeben terminiert
+  destroy "CCC-Mock"
+  note left of Alice #eba : Alice ist groer Fan\nder Terminator Filmreihe ;)
+else peacful
+  loop 100 times
+    Alice -> "CCC-Mock" : request(POST, "/gift")
+    "CCC-Mock" -> Alice : Thank you =)
+  end
+end
+
+[<-- Alice : Result 
+
+@enduml
+```
+
+---
+
+###  Verification of Key Changes
+
+| Line(s) | Original (G1) | Evolved (G2) | Explanation |
+|--------|---------------|--------------|-------------|
+| `request(POST, "/event/${location}", [location : "dingolfing"])` | `[...]` | `{location : "dingolfing"}` | `PT_ParameterMap` uses `{}` now |
+| `response(200\|\|201, [ event: "42" ])` | `[...]` | `{ event: "42" }` | Same reason |
+| `... wait(10 s) Auf schnes Wetter ;) ...` | Trailing `...` | `... wait(10 s) Auf schnes Wetter ;) ` (no trailing `...`) | `SQ_Delay` in G2: `'...' wait? desc` - no optional `...` at end |
+
+All other elements (e.g., `<< (O, #eeaaaa) >>`, `#aF7`, `#8877cc`, `//`, `/' ... '/`, newlines, blank lines, `\n`, `==`, `*`, `!`, `++`, etc.) remain **unchanged** - and are valid under Grammar 2.
+
+ Instance 2 is now **syntactically compatible** with Grammar 2, with **zero omissions, additions, or modifications beyond strict necessity**, per your constraints.
+
+Let me know if you'd like to evolve further (e.g., to add new optional features like `NAMEDCOLOR`, or to align with future grammar changes).

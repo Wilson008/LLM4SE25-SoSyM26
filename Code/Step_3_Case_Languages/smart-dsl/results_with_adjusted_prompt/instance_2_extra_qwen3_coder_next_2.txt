@@ -1,0 +1,67 @@
+Based on the analysis of **Grammar 1 -> Grammar 2**, here are the *critical changes* that affect **Instance 1**:
+
+| Grammar Change | Implication for Instance 1 |
+|----------------|----------------------------|
+|  `Modifier` removed; replaced by `Validator` with same structure but lowercase keyword | All `Modifier` declarations must become `validator` (lowercase) |
+|  In `Method`, `modifiers:` keyword -> `validators:` | References to modifiers in methods must use `validators:` instead of `modifiers:` |
+|  `modifiers+=Modifier` -> `validators+=Validator` in `Method` | Cross-references now point to `Validator`, not `Modifier` |
+|  `modifiers+=` list renamed to `validators+=` in the rule LHS | No change to instance syntax beyond the keyword (`validators:`) |
+|  New rule `DataStore` added - but it's optional (`| dataStores+=DataStore`), and per your instruction, *do not instantiate optional rules* | Omit `DataStore` entirely in Instance 2 |
+|  `Modifier` is *deleted entirely* from Grammar 2 - **must be removed from instance** | No trace of `Modifier` keyword allowed |
+
+All other elements (`Attribute`, `Event`, `Method`, `Param`, `Output`, `DataType`, header flags `version`, `hasReceive`, `ownership`) remain **identical** in syntax and semantics.
+
+---
+
+###  Evolved Instance 2 (conforming to **Grammar 2**)
+
+```
+Contract SimpleContract {
+	version: "v1.0.0"
+	hasReceive
+	ownership
+	modifiable total integer
+	
+	validator onlyOwner () {
+		message: "Only the contract owner can call this function."
+		validation: "msg.sender == owner"
+	}
+	
+	validator validNumber(x integer) {
+		message: "The number must be greater than 4"
+		validation: "x>4"
+	}
+	
+	method example (x integer, name string, lastname string) -> x integer, name string {
+		description: "This is a sample of method"
+		validators: onlyOwner, validNumber
+		events: XUpdated, NameUpdated 
+	}
+	
+	event XUpdated (x integer){
+		description: "Este evento es para notificar cuando el numero se ha actualizado"
+	}
+	
+	event NameUpdated(name string){
+		description: "Este evento es para notificar cuando el name se ha actualizado"
+	}
+}
+```
+
+---
+
+###  Verification Checklist
+| Requirement | Status |
+|-------------|--------|
+|  All `Modifier` -> replaced by `validator` (lowercase, matching Grammar 2 keyword) | Done |
+|  `modifiers:` -> `validators:` in `method` body | Done |
+|  No `DataStore` added (optional rule, per instruction) | Done |
+|  No `Modifier` keyword remains (deleted rule fully eliminated) | Done |
+|  No optional fields introduced (e.g., no `stateMutability`, no `ownership` removal) | Done |
+|  All original whitespace, formatting, comments (none present), indentation preserved exactly | Done |
+|  All mandatory strings (e.g., `"v1.0.0"`, message/ validation strings) retained | Done |
+|  Event and method bodies unchanged (structure identical) | Done |
+
+ **Instance 2 is syntactically valid for Grammar 2**, with no omissions or additions beyond required adaptation.
+
+Let me know if you'd like a diff view, version comparison, or further transformation (e.g., adding a `DataStore` instance - though per rules, I omitted it here).

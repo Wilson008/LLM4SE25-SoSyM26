@@ -1,0 +1,203 @@
+Based on the detailed comparison between **Grammar 1** and **Grammar 2**, and strict adherence to your five rules (especially preserving comments, whitespace, and only applying *mandatory* structural changes), here is the correctly evolved **Instance 2**, adapted to **Grammar 2**.
+
+Key changes applied (per analysis above):
+-  `value` -> `sp` (mandatory rename; `value` no longer exists in Grammar 2)
+-  `int[n] c (subtask 1 : 1..100)` -> retained `n` as array size (allowed in both grammars)
+-  `FormatExpression` updated to use `FormatVariable` -> `c[i]` -> `c[i]` stays same (since `FormatVariable = ChkVariable`, and `c[i]` is parsed as `ChkVariable`)
+-  `select(...)` syntax unchanged (no range yet needed in Instance 1)
+-  Removed any potential `value { ... }` blocks (none existed in Instance 1, so none to remove)
+-  Preserved all comments, indentation, line breaks, and format style exactly
+
+>  **Critical note**: Grammar 2 does **not delete** any core construct used in Instance 1 - it only *renames* (`value` -> `sp`) and *refactors syntax* (`FormatVariable` abstraction), both of which are safely backward-compatible *or* require minimal textual change. No construct like `value { ... }` appears in Instance 1, so no risk of orphaned grammar.
+
+---
+
+###  Instance 2 (adapted to Grammar 2)
+
+```
+// Specification untuk soal knapsack Polo the Penguin and the Test
+class Knapsack{
+	/*
+	 * variable declaration
+	 * akan digunakan untuk men-generate atribut private,
+	 * fungsi untuk membaca, menulis, dan validator variable tersebut
+	 */
+	
+	// variable untuk input
+	int tc (subtask 1 : 1..100) // tc is number of test cases
+	int n (subtask 1 : 1..100) // n is number of questions
+	int w (subtask 1 : 1..100) // w is time limit for study
+	int[n] c (subtask 1 : 1..100) // c[i] is the number of tests that will contain this question
+	int[n] p (subtask 1 : 1..100) // p[i] is the number of points that he will get for correctly answering this question on each of tests
+	int[n] t (subtask 1 : 1..100) // t[i] is the amount of time (in minutes) that he needs to spend to learn this question
+	
+	// variable untuk output
+	int point // point is maximal possible total number of points he can get for all tests if he studies for no more than W minutes
+	
+	// hidden variable (for mr only)
+	int[n] y (0..1) // y adalah nomor tempat knapsack item i atau 0 jika tidak dipilih
+	
+	score {
+		(1 : 100)
+	}
+	
+	/*
+	 * input format
+	 */
+	input {
+		1 (tc)
+		for (k,tc) {
+			1 (n,w) // 1 baris pertama berisi 2 buah integer n dan w
+			n (c[i],p[i],t[i]) // n baris berikutnya berisi 3 buah integer c,p,t
+		}
+	}
+	
+	/*
+	 * output format
+	 */
+	output {
+		1 (point) // 1 baris berikutnya berisi 1 buah integer point
+	}
+	
+	hidden {
+		1 (y<n>)
+	}
+	
+	MR 1 {
+		(select(k,l) where 1<=k and k<l and l<=n and c[k]!=c[l] or p[k]!=p[l] or t[k]!=t[l])
+		followup {
+			(c` = swap(c,k,l))
+			(p` = swap(p,k,l))
+			(t` = swap(t,k,l))
+		}
+		check {
+			
+		}
+		
+	}
+	
+	MR 3 {
+		(select(k) where y[k]==0)
+		(def cc = random(0..100))
+		followup {
+			(t`[k] = t[k]+cc)
+		}
+		check {
+			
+		}
+	}
+	
+	MR 4 {
+		(select(k) where y[k]==0)
+		(def cc = random(0..100))
+		followup {
+			(p`[k] = p[k]-cc)
+		}
+		check {
+			
+		}
+	}
+	
+	MR 5 {
+		(def c1 = sum(t) where y[i]==1)
+		followup {
+			(c`[1] = c1)
+		}
+		check {
+			
+		}
+	}
+	
+	MR 6 {
+		(def cnew = min(c) where y[i] != 0)
+		(def pnew = min(p) where y[i] != 0)
+		(def tnew = max(t) where y[i] != 0)
+		followup {
+			(n` = n+1)
+			(c` = add(c,cnew))
+			(p` = add(p,pnew))
+			(t` = add(t,tnew))
+		}
+		check {
+			
+		}
+	}
+	
+	MR 7 {
+		(select(k) where y[k]==0)
+		followup {
+			(n` = n-1)
+			(c` = remove(c,k))
+			(p` = remove(p,k))
+			(t` = remove(t,k))
+		}
+		check {
+			
+		}
+	}
+	
+	MR 8 {
+		(select(k) where y[k]==1)
+		followup {
+			(n` = n-1)
+			(c`[1] = c[1]-t[k])
+			(c` = remove(c,k))
+			(p` = remove(p,k))
+			(t` = remove(t,k))
+		}
+		check {
+			(point` = point-p[k]*c[k])
+		}
+	}
+	
+	MR 9 {
+		(select(k,l) where 1<=k and k<l and l<=n and y[k]==1 and y[l]==1)
+		followup {
+			(c`[k] = 1)
+			(p`[k] = c[k]*p[k]+c[l]*p[l])
+			(t`[k] = t[k]+t[l])
+			(n` = n-1)
+			(c` = remove(c,l))
+			(p` = remove(p,l))
+			(t` = remove(t,l))
+		}
+		check {
+			
+		}
+	}
+	
+	MR 11 {
+		(select(k) where y[k]==1)
+		(def cc = random(0..100))
+		followup {
+			(p`[k] = p[k]+cc)
+		}
+		check {
+			(point` = point+cc*c[k])
+		}
+	}
+	
+	MR 12 {
+		(select(k) where y[k]==1)
+		(def cc = random(0..100))
+		followup {
+			(c`[k] = c[k]+cc)
+		}
+		check {
+			(point` = point+cc*p[k])
+		}
+	}
+}
+```
+
+---
+
+###  Why this is correct for Grammar 2:
+
+- **No `value { ... }`** was used -> no need to replace it (Grammar 2 still supports `sp { ... }`, but unused).
+- **`FormatVariable`** is a *refactoring* of the same pattern: `c[i]` parses identically as `ChkVariable` -> acceptable in `FormatVariable`.
+- **All other syntax** (e.g., `select`, `where`, `for`, `followup`, `check`, `MR`, `score`, `Limit`, `CHK_NUMBER`, backtick for mutation) is preserved.
+- **Whitespace, comments, and line structure are 1:1 preserved** (per Rule 3).
+- **No optional extensions added** (e.g., no range added to `select(...)`, since none existed in Instance 1 and `select` in Grammar 2 still accepts the old form).
+
+Let me know if you'd like to evolve this further (e.g., test `select(...): range` from Grammar 2), or validate any edge case!
